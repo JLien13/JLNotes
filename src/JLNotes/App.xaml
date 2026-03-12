@@ -1,0 +1,175 @@
+<Application x:Class="JLNotes.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:converters="clr-namespace:JLNotes.Converters"
+             xmlns:behaviors="clr-namespace:JLNotes.Behaviors">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Resources/Colors.xaml" />
+                <ResourceDictionary Source="Resources/Styles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <converters:CountToVisibilityConverter x:Key="CountToVisibility" />
+            <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+            <converters:TagColorConverter x:Key="TagColor" />
+            <converters:TagTextColorConverter x:Key="TagTextColor" />
+
+            <DataTemplate x:Key="NoteItemTemplate">
+                <Border Style="{StaticResource NoteItemBorder}" Cursor="Hand"
+                        behaviors:NoteDragDrop.IsEnabled="True">
+                    <!-- Context Menu -->
+                    <Border.ContextMenu>
+                        <ContextMenu>
+                            <MenuItem Header="Priority">
+                                <MenuItem Header="High" Command="{Binding SetPriorityHighCommand}" />
+                                <MenuItem Header="Medium" Command="{Binding SetPriorityMediumCommand}" />
+                                <MenuItem Header="Low" Command="{Binding SetPriorityLowCommand}" />
+                            </MenuItem>
+                            <MenuItem Header="Status">
+                                <MenuItem Header="Toggle Done" Command="{Binding ToggleStatusCommand}" />
+                            </MenuItem>
+                            <Separator />
+                            <MenuItem Header="Open in Claude" Command="{Binding OpenInClaudeCommand}" />
+                            <Separator />
+                            <MenuItem Header="Delete" Command="{Binding DeleteCommand}" />
+                        </ContextMenu>
+                    </Border.ContextMenu>
+
+                    <Border.InputBindings>
+                        <MouseBinding MouseAction="LeftClick" Command="{Binding ToggleExpandCommand}" />
+                    </Border.InputBindings>
+
+                    <StackPanel>
+                        <!-- Title Row -->
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <Ellipse Grid.Column="0" Style="{StaticResource PriorityDot}"
+                                     Fill="{Binding PriorityBrush}" />
+                            <CheckBox Grid.Column="1" Style="{StaticResource DarkCheckBox}"
+                                      IsChecked="{Binding IsDone}" />
+                            <TextBlock Grid.Column="2" Text="{Binding Title}"
+                                       Style="{StaticResource BaseText}"
+                                       TextTrimming="CharacterEllipsis"
+                                       VerticalAlignment="Center" />
+                            <!-- Timestamp -->
+                            <TextBlock Grid.Column="3" Text="{Binding TimeAgo}"
+                                       Style="{StaticResource SecondaryText}"
+                                       FontSize="10"
+                                       VerticalAlignment="Center"
+                                       Margin="6,0,0,0" />
+                        </Grid>
+
+                        <!-- Subtitle: Tags -->
+                        <ItemsControl ItemsSource="{Binding Tags}"
+                                      Visibility="{Binding ShowTags, Converter={StaticResource BoolToVisibility}}"
+                                      Margin="16,4,0,0">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Background="{Binding Converter={StaticResource TagColor}}"
+                                            CornerRadius="3" Padding="5,1" Margin="0,0,4,2">
+                                        <TextBlock Text="{Binding}"
+                                                   Foreground="{Binding Converter={StaticResource TagTextColor}}"
+                                                   FontSize="10" FontFamily="Segoe UI" />
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <!-- Subtitle: Project or Repo -->
+                        <TextBlock Text="{Binding SubtitleText}"
+                                   Visibility="{Binding ShowSubtitleText, Converter={StaticResource BoolToVisibility}}"
+                                   Style="{StaticResource SecondaryText}"
+                                   FontSize="11"
+                                   Margin="16,3,0,0" />
+
+                        <!-- Expanded Edit Area -->
+                        <StackPanel Visibility="{Binding IsExpanded, Converter={StaticResource BoolToVisibility}}"
+                                    Margin="0,8,0,0">
+
+                            <!-- Title edit -->
+                            <TextBlock Text="Title" Style="{StaticResource SecondaryText}" Margin="0,0,0,2" />
+                            <TextBox Text="{Binding EditTitle, UpdateSourceTrigger=PropertyChanged}"
+                                     Background="{DynamicResource BgTertiaryBrush}"
+                                     Foreground="{DynamicResource TextPrimaryBrush}"
+                                     BorderBrush="{DynamicResource BorderSubtleBrush}"
+                                     FontFamily="Segoe UI" FontSize="13"
+                                     Padding="6,4" Margin="0,0,0,6" />
+
+                            <!-- Body edit -->
+                            <TextBlock Text="Notes" Style="{StaticResource SecondaryText}" Margin="0,0,0,2" />
+                            <TextBox Text="{Binding EditBody, UpdateSourceTrigger=PropertyChanged}"
+                                     Background="{DynamicResource BgTertiaryBrush}"
+                                     Foreground="{DynamicResource TextPrimaryBrush}"
+                                     BorderBrush="{DynamicResource BorderSubtleBrush}"
+                                     FontFamily="Segoe UI" FontSize="12"
+                                     AcceptsReturn="True" TextWrapping="Wrap"
+                                     MinHeight="80" MaxHeight="200"
+                                     VerticalScrollBarVisibility="Auto"
+                                     Padding="6,4" Margin="0,0,0,6" />
+
+                            <!-- Project + Branch row -->
+                            <Grid Margin="0,0,0,6">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Margin="0,0,4,0">
+                                    <TextBlock Text="Project" Style="{StaticResource SecondaryText}" Margin="0,0,0,2" />
+                                    <TextBox Text="{Binding EditProject, UpdateSourceTrigger=PropertyChanged}"
+                                             Background="{DynamicResource BgTertiaryBrush}"
+                                             Foreground="{DynamicResource TextPrimaryBrush}"
+                                             BorderBrush="{DynamicResource BorderSubtleBrush}"
+                                             Padding="6,4" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Margin="4,0,0,0">
+                                    <TextBlock Text="Branch" Style="{StaticResource SecondaryText}" Margin="0,0,0,2" />
+                                    <TextBox Text="{Binding EditBranch, UpdateSourceTrigger=PropertyChanged}"
+                                             Background="{DynamicResource BgTertiaryBrush}"
+                                             Foreground="{DynamicResource TextPrimaryBrush}"
+                                             BorderBrush="{DynamicResource BorderSubtleBrush}"
+                                             Padding="6,4" />
+                                </StackPanel>
+                            </Grid>
+
+                            <!-- Repo -->
+                            <TextBlock Text="Repo" Style="{StaticResource SecondaryText}" Margin="0,0,0,2" />
+                            <TextBox Text="{Binding EditRepo, UpdateSourceTrigger=PropertyChanged}"
+                                     Background="{DynamicResource BgTertiaryBrush}"
+                                     Foreground="{DynamicResource TextPrimaryBrush}"
+                                     BorderBrush="{DynamicResource BorderSubtleBrush}"
+                                     Padding="6,4" Margin="0,0,0,6" />
+
+                            <!-- Tags edit -->
+                            <TextBlock Text="Tags (comma separated)" Style="{StaticResource SecondaryText}" Margin="0,0,0,2" />
+                            <TextBox Text="{Binding EditTags, UpdateSourceTrigger=PropertyChanged}"
+                                     Background="{DynamicResource BgTertiaryBrush}"
+                                     Foreground="{DynamicResource TextPrimaryBrush}"
+                                     BorderBrush="{DynamicResource BorderSubtleBrush}"
+                                     Padding="6,4" Margin="0,0,0,8" />
+
+                            <!-- Save / Cancel buttons -->
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                <Button Content="Cancel" Style="{StaticResource SubtleButton}"
+                                        Command="{Binding CancelEditsCommand}" Margin="0,0,8,0" />
+                                <Button Content="Save" Style="{StaticResource SubtleButton}"
+                                        Command="{Binding SaveEditsCommand}"
+                                        Foreground="{DynamicResource AccentBlueBrush}" />
+                            </StackPanel>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+            </DataTemplate>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>
