@@ -38,6 +38,7 @@
 
                     <Border.InputBindings>
                         <MouseBinding MouseAction="LeftClick" Command="{Binding ToggleExpandCommand}" />
+                        <MouseBinding MouseAction="LeftDoubleClick" Command="{Binding ToggleExpandCommand}" />
                     </Border.InputBindings>
 
                     <StackPanel>
@@ -107,16 +108,27 @@
                                      Padding="6,4" Margin="0,0,0,6" />
 
                             <!-- Body edit -->
-                            <TextBlock Text="Notes" Style="{StaticResource SecondaryText}" Margin="0,0,0,2" />
-                            <TextBox Text="{Binding EditBody, UpdateSourceTrigger=PropertyChanged}"
-                                     Background="{DynamicResource BgTertiaryBrush}"
-                                     Foreground="{DynamicResource TextPrimaryBrush}"
-                                     BorderBrush="{DynamicResource BorderSubtleBrush}"
-                                     FontFamily="Segoe UI" FontSize="12"
-                                     AcceptsReturn="True" TextWrapping="Wrap"
-                                     MinHeight="80" MaxHeight="200"
-                                     VerticalScrollBarVisibility="Auto"
-                                     Padding="6,4" Margin="0,0,0,6" />
+                            <Grid Margin="0,0,0,2">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="Notes" Style="{StaticResource SecondaryText}" />
+                                <Button Grid.Column="1" Content="&#x1F4CE;" Style="{StaticResource SubtleButton}"
+                                        FontSize="11" Padding="4,0"
+                                        ToolTip="Add image"
+                                        behaviors:RichTextBoxBehavior.IsUploadButton="True" />
+                            </Grid>
+                            <RichTextBox Background="{DynamicResource BgTertiaryBrush}"
+                                         Foreground="{DynamicResource TextPrimaryBrush}"
+                                         BorderBrush="{DynamicResource BorderSubtleBrush}"
+                                         FontFamily="Segoe UI" FontSize="12"
+                                         AcceptsReturn="True"
+                                         MinHeight="80" MaxHeight="200"
+                                         VerticalScrollBarVisibility="Auto"
+                                         Padding="6,4" Margin="0,0,0,6"
+                                         AllowDrop="True"
+                                         behaviors:RichTextBoxBehavior.Document="{Binding EditDocument}" />
 
                             <!-- Project + Branch row -->
                             <Grid Margin="0,0,0,6">

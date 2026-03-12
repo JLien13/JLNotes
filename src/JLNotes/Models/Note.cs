@@ -1,3 +1,4 @@
+using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
 using YamlDotNet.Serialization;
@@ -15,6 +16,7 @@ public class Note
     public NotePriority Priority { get; set; } = NotePriority.Medium;
     public NoteStatus Status { get; set; } = NoteStatus.Open;
     public List<string> Tags { get; set; } = [];
+    public List<string> Attachments { get; set; } = [];
     public DateTime Created { get; set; } = DateTime.Now;
     public DateTime Updated { get; set; } = DateTime.Now;
     public string Repo { get; set; } = "";
@@ -67,6 +69,7 @@ public class Note
             Priority = Enum.TryParse<NotePriority>(frontmatter.Priority, true, out var p) ? p : NotePriority.Medium,
             Status = Enum.TryParse<NoteStatus>(frontmatter.Status, true, out var s) ? s : NoteStatus.Open,
             Tags = frontmatter.Tags ?? [],
+            Attachments = frontmatter.Attachments ?? [],
             Created = frontmatter.Created,
             Updated = frontmatter.Updated,
             Repo = frontmatter.Repo ?? "",
@@ -88,6 +91,10 @@ public class Note
             sb.AppendLine($"tags: [{string.Join(", ", Tags)}]");
         else
             sb.AppendLine("tags: []");
+        if (Attachments.Count > 0)
+            sb.AppendLine($"attachments: [{string.Join(", ", Attachments)}]");
+        else
+            sb.AppendLine("attachments: []");
         sb.AppendLine($"created: {Created:yyyy-MM-ddTHH:mm:ss}");
         sb.AppendLine($"updated: {Updated:yyyy-MM-ddTHH:mm:ss}");
         if (!string.IsNullOrEmpty(Repo))
@@ -98,6 +105,23 @@ public class Note
         sb.AppendLine();
         sb.AppendLine(Body);
         return sb.ToString();
+    }
+
+    public string GetSlug()
+    {
+        var fileName = Path.GetFileNameWithoutExtension(FilePath);
+        // Remove date prefix (YYYY-MM-DD-)
+        if (fileName.Length > 11 && fileName[4] == '-' && fileName[7] == '-' && fileName[10] == '-')
+            return fileName.Substring(11);
+        return fileName;
+    }
+
+    public string GetAttachmentsDir()
+    {
+        var baseDir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            ".jlnotes", "attachments", GetSlug());
+        return baseDir;
     }
 
     public string GenerateFileName()
@@ -114,6 +138,7 @@ public class Note
         public string Priority { get; set; } = "medium";
         public string Status { get; set; } = "open";
         public List<string> Tags { get; set; } = [];
+        public List<string> Attachments { get; set; } = [];
         public DateTime Created { get; set; }
         public DateTime Updated { get; set; }
         public string Repo { get; set; } = "";

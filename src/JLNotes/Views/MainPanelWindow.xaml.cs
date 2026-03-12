@@ -10,6 +10,7 @@ public partial class MainPanelWindow : Window
 {
     private double _restoreLeft, _restoreTop, _restoreWidth, _restoreHeight;
     private bool _isMaximized;
+    private bool _headerDragging;
 
     public MainPanelWindow()
     {
@@ -33,16 +34,23 @@ public partial class MainPanelWindow : Window
         }
         else
         {
-            if (_isMaximized)
-            {
-                var mousePos = PointToScreen(e.GetPosition(this));
-                _isMaximized = false;
-                Left = mousePos.X - _restoreWidth / 2;
-                Top = mousePos.Y - 15;
-                Width = _restoreWidth;
-                Height = _restoreHeight;
-                UpdateMaximizeButton();
-            }
+            _headerDragging = true;
+            DragMove();
+            _headerDragging = false;
+        }
+    }
+
+    private void Header_MouseMove(object sender, MouseEventArgs e)
+    {
+        if (_headerDragging && _isMaximized && e.LeftButton == MouseButtonState.Pressed)
+        {
+            var mousePos = PointToScreen(e.GetPosition(this));
+            _isMaximized = false;
+            Left = mousePos.X - _restoreWidth / 2;
+            Top = mousePos.Y - 15;
+            Width = _restoreWidth;
+            Height = _restoreHeight;
+            UpdateMaximizeButton();
             DragMove();
         }
     }
@@ -92,7 +100,7 @@ public partial class MainPanelWindow : Window
     private void Settings_Click(object sender, RoutedEventArgs e)
     {
         if (DataContext is not MainViewModel mainVm) return;
-        var settingsWindow = new SettingsWindow(mainVm.SettingsService) { Owner = this };
+        var settingsWindow = new SettingsWindow(mainVm.SettingsService, mainVm.ProjectService) { Owner = this };
         settingsWindow.SettingsChanged += () => mainVm.RefreshNotes();
         settingsWindow.ShowDialog();
     }

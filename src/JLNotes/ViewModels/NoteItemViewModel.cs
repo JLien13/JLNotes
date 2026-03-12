@@ -1,6 +1,8 @@
+using System.Windows.Documents;
 using System.Windows.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using JLNotes.Helpers;
 using JLNotes.Models;
 using JLNotes.Services;
 
@@ -11,22 +13,23 @@ public partial class NoteItemViewModel : ObservableObject
     private readonly Note _note;
     private readonly NoteService _noteService;
     private readonly SettingsService _settingsService;
+    private readonly ProjectService _projectService;
 
     [ObservableProperty] private bool _isExpanded;
     [ObservableProperty] private string _editTitle;
-    [ObservableProperty] private string _editBody;
+    [ObservableProperty] private FlowDocument? _editDocument;
     [ObservableProperty] private string _editProject;
     [ObservableProperty] private string _editBranch;
     [ObservableProperty] private string _editRepo;
     [ObservableProperty] private string _editTags;
 
-    public NoteItemViewModel(Note note, NoteService noteService, SettingsService settingsService)
+    public NoteItemViewModel(Note note, NoteService noteService, SettingsService settingsService, ProjectService projectService)
     {
         _note = note;
         _noteService = noteService;
         _settingsService = settingsService;
+        _projectService = projectService;
         _editTitle = note.Title;
-        _editBody = note.Body;
         _editProject = note.Project;
         _editBranch = note.Branch;
         _editRepo = note.Repo;
@@ -101,7 +104,8 @@ public partial class NoteItemViewModel : ObservableObject
         if (IsExpanded)
         {
             EditTitle = _note.Title;
-            EditBody = _note.Body;
+            var attachDir = _noteService.GetAttachmentsDir(_note);
+            EditDocument = FlowDocumentHelper.BuildDocument(_note.Body, attachDir);
             EditProject = _note.Project;
             EditBranch = _note.Branch;
             EditRepo = _note.Repo;
@@ -113,7 +117,11 @@ public partial class NoteItemViewModel : ObservableObject
     private void SaveEdits()
     {
         _note.Title = EditTitle;
-        _note.Body = EditBody;
+        if (EditDocument != null)
+        {
+            _note.Body = FlowDocumentHelper.SerializeDocument(EditDocument);
+            _note.Attachments = FlowDocumentHelper.GetAttachmentFilenames(EditDocument);
+        }
         _note.Project = EditProject;
         _note.Branch = EditBranch;
         _note.Repo = EditRepo;
@@ -185,16 +193,73 @@ public partial class NoteItemViewModel : ObservableObject
     [RelayCommand]
     private void OpenInClaude()
     {
-        if (string.IsNullOrEmpty(Repo)) return;
+        // Resolve repo path: try note's Repo field as absolute path first,
+        // then fall back to project's registered repo path
+        var repoPath = Repo;
+        if (string.IsNullOrEmpty(repoPath) || !System.IO.Directory.Exists(repoPath))
+        {
+            var project = _projectService.Load()
+                .FirstOrDefault(p => p.Name.Equals(Project, StringComparison.OrdinalIgnoreCase));
+            repoPath = project?.Repo ?? "";
+        }
+
+        if (string.IsNullOrEmpty(repoPath) || !System.IO.Directory.Exists(repoPath))
+        {
+            System.Windows.MessageBox.Show(
+                $"No valid repo path found for project \"{Project}\".\nSet a repo path in projects.json or on the note.",
+                "Open in Claude", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+            return;
+        }
+
+        // Build context prompt from the note
+        var prompt = $"I'm working on: {Title}";
+        if (!string.IsNullOrEmpty(Branch))
+            prompt += $" (branch: {Branch})";
+        prompt += $"\n\n{Body}";
+        if (!string.IsNullOrEmpty(_note.FilePath))
+            prompt += $"\n\nNote file: {_note.FilePath}";
+
+        // Escape quotes for cmd
+        var escapedPrompt = prompt.Replace("\"", "\\\"");
 
         var startInfo = new System.Diagnostics.ProcessStartInfo
         {
             FileName = "cmd.exe",
-            Arguments = $"/c start cmd /k \"cd /d {Repo} && claude\"",
+            Arguments = $"/c start cmd /k \"cd /d \"{repoPath}\" && claude \"{escapedPrompt}\"\"",
             UseShellExecute = false,
             CreateNoWindow = true
         };
         System.Diagnostics.Process.Start(startInfo);
+    }
+
+    public void HandleImageDrop(string[] filePaths, System.Windows.Controls.RichTextBox richTextBox)
+    {
+        var imageExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            { ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp" };
+
+        foreach (var path in filePaths)
+        {
+            var ext = System.IO.Path.GetExtension(path);
+            if (!imageExtensions.Contains(ext)) continue;
+
+            var fileName = _noteService.AddAttachment(_note, path);
+            var attachDir = _noteService.GetAttachmentsDir(_note);
+            FlowDocumentHelper.InsertAttachment(richTextBox, fileName, attachDir);
+        }
+    }
+
+    public void HandleImageUpload(System.Windows.Controls.RichTextBox richTextBox)
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Filter = "Images|*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.webp",
+            Multiselect = true,
+            Title = "Add Images"
+        };
+        if (dialog.ShowDialog() == true)
+        {
+            HandleImageDrop(dialog.FileNames, richTextBox);
+        }
     }
 
     public void AcceptDrop(NoteItemViewModel source)

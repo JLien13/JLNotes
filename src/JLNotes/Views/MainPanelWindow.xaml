@@ -4,7 +4,7 @@
         xmlns:vm="clr-namespace:JLNotes.ViewModels"
         Title="JL Notes"
         Icon="pack://application:,,,/tray.ico"
-        Width="350" Height="500"
+        Width="380" Height="550"
         WindowStyle="None"
         AllowsTransparency="True"
         Background="Transparent"
@@ -33,7 +33,7 @@
             </Grid.RowDefinitions>
 
             <!-- Header -->
-            <Border Grid.Row="0" Padding="12,10" MouseLeftButtonDown="Header_MouseLeftButtonDown"
+            <Border Grid.Row="0" Padding="12,10" MouseLeftButtonDown="Header_MouseLeftButtonDown" MouseMove="Header_MouseMove"
                     Background="{DynamicResource BgSecondaryBrush}"
                     CornerRadius="8,8,0,0">
                 <Grid>

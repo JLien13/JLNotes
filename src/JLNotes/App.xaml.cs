@@ -1,4 +1,5 @@
 using System.IO;
+using System.Threading;
 using System.Windows;
 using Hardcodet.Wpf.TaskbarNotification;
 using JLNotes.Services;
@@ -9,6 +10,7 @@ namespace JLNotes;
 
 public partial class App : Application
 {
+    private static Mutex? _singleInstanceMutex;
     private TaskbarIcon? _trayIcon;
     private MainPanelWindow? _mainPanel;
     private NoteService? _noteService;
@@ -26,6 +28,18 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        _singleInstanceMutex = new Mutex(true, "JLNotes_SingleInstance", out bool isNewInstance);
+        if (!isNewInstance)
+        {
+            MessageBox.Show(
+                "JL Notes is already running.\n\nCheck your system tray for the existing instance.",
+                "JL Notes",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            Shutdown();
+            return;
+        }
 
         // Migrate from legacy directory if needed
         if (!Directory.Exists(BaseDir) && Directory.Exists(LegacyDir))
@@ -134,6 +148,8 @@ public partial class App : Application
     {
         _trayIcon?.Dispose();
         _noteService?.Dispose();
+        _singleInstanceMutex?.ReleaseMutex();
+        _singleInstanceMutex?.Dispose();
         base.OnExit(e);
     }
 }

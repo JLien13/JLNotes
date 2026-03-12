@@ -1,0 +1,67 @@
+<Window x:Class="JLNotes.Views.AddProjectWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Add Project"
+        Width="380" Height="180"
+        WindowStartupLocation="CenterOwner"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ResizeMode="NoResize"
+        KeyDown="Window_KeyDown">
+
+    <Border Background="{DynamicResource BgPrimaryBrush}"
+            BorderBrush="{DynamicResource BorderSubtleBrush}"
+            BorderThickness="1"
+            CornerRadius="8"
+            Padding="16">
+        <StackPanel>
+            <TextBlock Text="Add Project" FontSize="14" FontWeight="SemiBold"
+                       Foreground="{DynamicResource TextPrimaryBrush}"
+                       FontFamily="Segoe UI" Margin="0,0,0,12" />
+
+            <!-- Name -->
+            <TextBox x:Name="NameBox"
+                     Background="{DynamicResource BgSecondaryBrush}"
+                     Foreground="{DynamicResource TextPrimaryBrush}"
+                     BorderBrush="{DynamicResource BorderSubtleBrush}"
+                     FontFamily="Segoe UI" FontSize="12"
+                     Padding="8,5" Margin="0,0,0,8"
+                     Tag="Project name"
+                     Style="{StaticResource SearchBox}" />
+
+            <!-- Repo path -->
+            <Grid Margin="0,0,0,12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBox x:Name="RepoBox"
+                         Background="{DynamicResource BgSecondaryBrush}"
+                         Foreground="{DynamicResource TextPrimaryBrush}"
+                         BorderBrush="{DynamicResource BorderSubtleBrush}"
+                         FontFamily="Segoe UI" FontSize="12"
+                         Padding="8,5"
+                         Tag="Repo folder path"
+                         Style="{StaticResource SearchBox}" />
+                <Button Grid.Column="1" Content="Browse"
+                        Style="{StaticResource SubtleButton}"
+                        Foreground="{DynamicResource AccentBlueBrush}"
+                        Margin="6,0,0,0"
+                        Click="Browse_Click" />
+            </Grid>
+
+            <!-- Buttons -->
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Content="Cancel"
+                        Style="{StaticResource SubtleButton}"
+                        Margin="0,0,8,0"
+                        Click="Cancel_Click" />
+                <Button Content="Add"
+                        Style="{StaticResource SubtleButton}"
+                        Foreground="{DynamicResource AccentBlueBrush}"
+                        Click="Add_Click" />
+            </StackPanel>
+        </StackPanel>
+    </Border>
+</Window>

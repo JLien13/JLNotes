@@ -13,7 +13,7 @@ public partial class MainViewModel : ObservableObject
     private readonly SettingsService _settingsService;
 
     [ObservableProperty]
-    private string _selectedProject = "All";
+    private string _selectedProject = "Projects";
 
     [ObservableProperty]
     private bool _showCompleted;
@@ -24,9 +24,10 @@ public partial class MainViewModel : ObservableObject
     public ObservableCollection<NoteItemViewModel> HighPriority { get; } = [];
     public ObservableCollection<NoteItemViewModel> MediumPriority { get; } = [];
     public ObservableCollection<NoteItemViewModel> LowPriority { get; } = [];
-    public ObservableCollection<string> Projects { get; } = ["All"];
+    public ObservableCollection<string> Projects { get; } = ["Projects"];
 
     public NoteService NoteService => _noteService;
+    public ProjectService ProjectService => _projectService;
     public SettingsService SettingsService => _settingsService;
 
     public MainViewModel(NoteService noteService, ProjectService projectService, SettingsService settingsService)
@@ -43,19 +44,35 @@ public partial class MainViewModel : ObservableObject
         _noteService.StartWatching();
     }
 
-    private void LoadProjects()
+    private void LoadProjects(IEnumerable<Note>? notes = null)
     {
-        var projects = _projectService.Load();
-        foreach (var p in projects)
-            Projects.Add(p.Name);
+        var known = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Projects" };
+
+        // From projects.json
+        foreach (var p in _projectService.Load())
+            known.Add(p.Name);
+
+        // From note frontmatter
+        if (notes != null)
+            foreach (var n in notes)
+                if (!string.IsNullOrWhiteSpace(n.Project))
+                    known.Add(n.Project);
+
+        // Sync the collection (keep "Projects" first)
+        var sorted = known.Where(k => k != "Projects").OrderBy(k => k).ToList();
+        Projects.Clear();
+        Projects.Add("Projects");
+        foreach (var name in sorted)
+            Projects.Add(name);
     }
 
     public void RefreshNotes()
     {
         var all = _noteService.LoadAll();
+        LoadProjects(all);
 
         var filtered = all.Where(n =>
-            (SelectedProject == "All" || n.Project == SelectedProject) &&
+            (SelectedProject == "Projects" || n.Project == SelectedProject) &&
             (ShowCompleted || n.Status != NoteStatus.Done) &&
             (string.IsNullOrEmpty(SearchText) ||
              n.Title.Contains(SearchText, StringComparison.OrdinalIgnoreCase) ||
@@ -73,7 +90,7 @@ public partial class MainViewModel : ObservableObject
         group.Clear();
         foreach (var note in notes)
         {
-            var vm = new NoteItemViewModel(note, _noteService, _settingsService);
+            var vm = new NoteItemViewModel(note, _noteService, _settingsService, _projectService);
             vm.NoteChanged += () => RefreshNotes();
             vm.NoteDeleted += () => RefreshNotes();
             vm.DropReceived += HandleReorder;
