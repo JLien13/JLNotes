@@ -22,6 +22,8 @@ public partial class NoteItemViewModel : ObservableObject
     [ObservableProperty] private string _editBranch;
     [ObservableProperty] private string _editRepo;
     [ObservableProperty] private string _editTags;
+    [ObservableProperty] private bool _isSelected;
+    [ObservableProperty] private bool _isSelectMode;
 
     public NoteItemViewModel(Note note, NoteService noteService, SettingsService settingsService, ProjectService projectService)
     {
@@ -80,14 +82,36 @@ public partial class NoteItemViewModel : ObservableObject
         set
         {
             _note.Status = value ? NoteStatus.Done : NoteStatus.Open;
+            _noteService.Save(_note);
             OnPropertyChanged();
+            OnPropertyChanged(nameof(StatusMenuText));
             NoteChanged?.Invoke();
         }
     }
 
+    public string StatusMenuText => IsDone ? "Mark Open" : "Mark Done";
+
     public event Action? NoteChanged;
     public event Action? NoteDeleted;
     public event Action<NoteItemViewModel, NoteItemViewModel>? DropReceived;
+
+    public Brush ProjectColorBrush
+    {
+        get
+        {
+            if (string.IsNullOrEmpty(Project)) return Brushes.Transparent;
+            var project = _projectService.Load()
+                .FirstOrDefault(p => p.Name.Equals(Project, StringComparison.OrdinalIgnoreCase));
+            if (project == null || string.IsNullOrEmpty(project.Color))
+                return Brushes.Transparent;
+            try
+            {
+                var color = (Color)System.Windows.Media.ColorConverter.ConvertFromString(project.Color);
+                return new SolidColorBrush(color);
+            }
+            catch { return Brushes.Transparent; }
+        }
+    }
 
     public Brush PriorityBrush => Priority switch
     {
@@ -168,8 +192,6 @@ public partial class NoteItemViewModel : ObservableObject
     private void ToggleStatus()
     {
         IsDone = !IsDone;
-        _noteService.Save(_note);
-        NoteChanged?.Invoke();
     }
 
     [RelayCommand]
@@ -211,25 +233,43 @@ public partial class NoteItemViewModel : ObservableObject
             return;
         }
 
-        // Build context prompt from the note
-        var prompt = $"I'm working on: {Title}";
+        // Build a short prompt that points Claude at the note file on disk.
+        // Launched via PowerShell -EncodedCommand (Base64 UTF-16) so nothing
+        // user-controlled (title, path, branch) ever touches the shell raw —
+        // em-dashes, parens, &, |, %, !, quotes, Unicode all pass through intact.
+        var prompt = $"Read my note at '{_note.FilePath}' and help me work on: {Title}";
         if (!string.IsNullOrEmpty(Branch))
             prompt += $" (branch: {Branch})";
-        prompt += $"\n\n{Body}";
-        if (!string.IsNullOrEmpty(_note.FilePath))
-            prompt += $"\n\nNote file: {_note.FilePath}";
 
-        // Escape quotes for cmd
-        var escapedPrompt = prompt.Replace("\"", "\\\"");
+        // Escape ALL single quotes (literals AND any in the user's title/path)
+        // for PowerShell's single-quoted string syntax: ' -> ''
+        var psEscaped = prompt.Replace("'", "''");
+        var psCommand = $"& claude '{psEscaped}'";
+        var encoded = Convert.ToBase64String(System.Text.Encoding.Unicode.GetBytes(psCommand));
 
         var startInfo = new System.Diagnostics.ProcessStartInfo
         {
-            FileName = "cmd.exe",
-            Arguments = $"/c start cmd /k \"cd /d \"{repoPath}\" && claude \"{escapedPrompt}\"\"",
-            UseShellExecute = false,
-            CreateNoWindow = true
+            FileName = "powershell.exe",
+            Arguments = $"-NoExit -EncodedCommand {encoded}",
+            WorkingDirectory = repoPath,
+            UseShellExecute = true
         };
         System.Diagnostics.Process.Start(startInfo);
+    }
+
+    [RelayCommand]
+    private void ExportToWord()
+    {
+        var dialog = new Microsoft.Win32.SaveFileDialog
+        {
+            Title = "Export Note to Word",
+            Filter = "Word Document|*.docx",
+            FileName = $"{_note.GetSlug()}.docx"
+        };
+        if (dialog.ShowDialog() == true)
+        {
+            ExportService.ExportToWord([_note], dialog.FileName);
+        }
     }
 
     public void HandleImageDrop(string[] filePaths, System.Windows.Controls.RichTextBox richTextBox)

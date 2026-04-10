@@ -14,10 +14,16 @@
             <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
             <converters:TagColorConverter x:Key="TagColor" />
             <converters:TagTextColorConverter x:Key="TagTextColor" />
+            <converters:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibility" />
 
             <DataTemplate x:Key="NoteItemTemplate">
+                <Border BorderThickness="3,0,0,0"
+                        BorderBrush="{Binding ProjectColorBrush}"
+                        CornerRadius="4"
+                        Margin="0,0,0,0">
                 <Border Style="{StaticResource NoteItemBorder}" Cursor="Hand"
-                        behaviors:NoteDragDrop.IsEnabled="True">
+                        behaviors:NoteDragDrop.IsEnabled="True"
+                        CornerRadius="0,4,4,0">
                     <!-- Context Menu -->
                     <Border.ContextMenu>
                         <ContextMenu>
@@ -26,11 +32,10 @@
                                 <MenuItem Header="Medium" Command="{Binding SetPriorityMediumCommand}" />
                                 <MenuItem Header="Low" Command="{Binding SetPriorityLowCommand}" />
                             </MenuItem>
-                            <MenuItem Header="Status">
-                                <MenuItem Header="Toggle Done" Command="{Binding ToggleStatusCommand}" />
-                            </MenuItem>
+                            <MenuItem Header="{Binding StatusMenuText}" Command="{Binding ToggleStatusCommand}" />
                             <Separator />
                             <MenuItem Header="Open in Claude" Command="{Binding OpenInClaudeCommand}" />
+                            <MenuItem Header="Export to Word" Command="{Binding ExportToWordCommand}" />
                             <Separator />
                             <MenuItem Header="Delete" Command="{Binding DeleteCommand}" />
                         </ContextMenu>
@@ -49,17 +54,24 @@
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
-                            <Ellipse Grid.Column="0" Style="{StaticResource PriorityDot}"
+                            <!-- Selection checkbox (select mode only) -->
+                            <CheckBox Grid.Column="0" Style="{StaticResource DarkCheckBox}"
+                                      IsChecked="{Binding IsSelected}"
+                                      Visibility="{Binding IsSelectMode, Converter={StaticResource BoolToVisibility}}" />
+                            <Ellipse Grid.Column="1" Style="{StaticResource PriorityDot}"
                                      Fill="{Binding PriorityBrush}" />
-                            <CheckBox Grid.Column="1" Style="{StaticResource DarkCheckBox}"
-                                      IsChecked="{Binding IsDone}" />
                             <TextBlock Grid.Column="2" Text="{Binding Title}"
                                        Style="{StaticResource BaseText}"
                                        TextTrimming="CharacterEllipsis"
                                        VerticalAlignment="Center" />
+                            <!-- Done checkbox (moved to right) -->
+                            <CheckBox Grid.Column="3" Style="{StaticResource DarkCheckBox}"
+                                      IsChecked="{Binding IsDone}"
+                                      Margin="6,0,0,0" />
                             <!-- Timestamp -->
-                            <TextBlock Grid.Column="3" Text="{Binding TimeAgo}"
+                            <TextBlock Grid.Column="4" Text="{Binding TimeAgo}"
                                        Style="{StaticResource SecondaryText}"
                                        FontSize="10"
                                        VerticalAlignment="Center"
@@ -104,7 +116,7 @@
                                      Background="{DynamicResource BgTertiaryBrush}"
                                      Foreground="{DynamicResource TextPrimaryBrush}"
                                      BorderBrush="{DynamicResource BorderSubtleBrush}"
-                                     FontFamily="Segoe UI" FontSize="13"
+                                     FontFamily="Segoe UI" FontSize="15"
                                      Padding="6,4" Margin="0,0,0,6" />
 
                             <!-- Body edit -->
@@ -122,7 +134,7 @@
                             <RichTextBox Background="{DynamicResource BgTertiaryBrush}"
                                          Foreground="{DynamicResource TextPrimaryBrush}"
                                          BorderBrush="{DynamicResource BorderSubtleBrush}"
-                                         FontFamily="Segoe UI" FontSize="12"
+                                         FontFamily="Segoe UI" FontSize="14"
                                          AcceptsReturn="True"
                                          MinHeight="80" MaxHeight="200"
                                          VerticalScrollBarVisibility="Auto"
@@ -180,6 +192,7 @@
                             </StackPanel>
                         </StackPanel>
                     </StackPanel>
+                </Border>
                 </Border>
             </DataTemplate>
         </ResourceDictionary>
