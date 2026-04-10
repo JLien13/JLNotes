@@ -17,7 +17,7 @@ public class AppSettings
     public List<string> CustomLabels { get; set; } = [];
 
     [JsonPropertyName("showCompleted")]
-    public bool ShowCompleted { get; set; } = false;
+    public bool ShowCompleted { get; set; } = true;
 
     [JsonPropertyName("theme")]
     public string Theme { get; set; } = "dark";
@@ -30,6 +30,9 @@ public class AppSettings
 
     [JsonPropertyName("closeBehavior")]
     public string CloseBehavior { get; set; } = "tray";
+
+    [JsonPropertyName("groupByProject")]
+    public bool GroupByProject { get; set; } = false;
 }
 
 public class WindowPosition

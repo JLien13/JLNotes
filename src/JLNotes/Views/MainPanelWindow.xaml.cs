@@ -135,6 +135,16 @@ public partial class MainPanelWindow : Window
         detailWindow.Show();
     }
 
+    private void ScrollViewer_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (sender is System.Windows.Controls.ScrollViewer sv)
+        {
+            // Reduce scroll speed to ~1/3 for smoother trackpad scrolling
+            sv.ScrollToVerticalOffset(sv.VerticalOffset - e.Delta / 3.0);
+            e.Handled = true;
+        }
+    }
+
     private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
     {
         if (DataContext is not MainViewModel mainVm) return;

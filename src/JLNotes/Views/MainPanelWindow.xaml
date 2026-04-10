@@ -8,7 +8,7 @@
         WindowStyle="None"
         AllowsTransparency="True"
         Background="Transparent"
-        Topmost="True"
+
         ShowInTaskbar="True"
         ResizeMode="CanResize"
         MinWidth="250" MinHeight="300"
@@ -30,6 +30,7 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
             <!-- Header -->
@@ -78,46 +79,130 @@
                 </Grid>
             </Border>
 
-            <!-- Search Bar -->
+            <!-- Search Bar + Group Toggle -->
             <Border Grid.Row="1" Padding="8,6"
                     Background="{DynamicResource BgPrimaryBrush}">
-                <TextBox Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
-                         Background="{DynamicResource BgSecondaryBrush}"
-                         Foreground="{DynamicResource TextPrimaryBrush}"
-                         BorderBrush="{DynamicResource BorderSubtleBrush}"
-                         FontFamily="Segoe UI" FontSize="12"
-                         Padding="8,5"
-                         Tag="Search notes..."
-                         Style="{StaticResource SearchBox}" />
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBox Grid.Column="0"
+                             Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                             Background="{DynamicResource BgSecondaryBrush}"
+                             Foreground="{DynamicResource TextPrimaryBrush}"
+                             BorderBrush="{DynamicResource BorderSubtleBrush}"
+                             FontFamily="Segoe UI" FontSize="14"
+                             Padding="8,5"
+                             Tag="Search notes..."
+                             Style="{StaticResource SearchBox}" />
+                    <StackPanel Grid.Column="1" Orientation="Horizontal">
+                        <ToggleButton IsChecked="{Binding ShowCompleted}"
+                                      ToolTip="Show completed"
+                                      Style="{StaticResource SubtleToggleButton}"
+                                      Content="&#x2713;"
+                                      FontSize="14"
+                                      Margin="6,0,0,0"
+                                      Padding="4,2" />
+                        <ToggleButton IsChecked="{Binding GroupByProject}"
+                                      ToolTip="Group by project"
+                                      Style="{StaticResource SubtleToggleButton}"
+                                      Content="&#x25A6;"
+                                      FontSize="14"
+                                      Margin="4,0,0,0"
+                                      Padding="4,2" />
+                        <ToggleButton IsChecked="{Binding IsSelectMode}"
+                                      ToolTip="Select notes"
+                                      Style="{StaticResource SubtleToggleButton}"
+                                      Content="&#x2610;"
+                                      FontSize="14"
+                                      Margin="4,0,0,0"
+                                      Padding="4,2" />
+                    </StackPanel>
+                </Grid>
             </Border>
 
             <!-- Note List -->
             <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto"
                           Style="{StaticResource DarkScrollViewer}"
-                          Padding="8">
-                <StackPanel>
-                    <!-- High Priority -->
-                    <TextBlock Text="HIGH" Style="{StaticResource SecondaryText}"
-                               Margin="4,8,0,4"
-                               Visibility="{Binding HighPriority.Count, Converter={StaticResource CountToVisibility}}" />
-                    <ItemsControl ItemsSource="{Binding HighPriority}"
-                                  ItemTemplate="{StaticResource NoteItemTemplate}" />
+                          Padding="8"
+                          PreviewMouseWheel="ScrollViewer_PreviewMouseWheel">
+                <Grid>
+                    <!-- Priority View (default) -->
+                    <StackPanel Visibility="{Binding GroupByProject, Converter={StaticResource InverseBoolToVisibility}}">
+                        <!-- High Priority -->
+                        <TextBlock Text="HIGH" Style="{StaticResource SecondaryText}"
+                                   Margin="4,8,0,4"
+                                   Visibility="{Binding HighPriority.Count, Converter={StaticResource CountToVisibility}}" />
+                        <ItemsControl ItemsSource="{Binding HighPriority}"
+                                      ItemTemplate="{StaticResource NoteItemTemplate}" />
 
-                    <!-- Medium Priority -->
-                    <TextBlock Text="MEDIUM" Style="{StaticResource SecondaryText}"
-                               Margin="4,12,0,4"
-                               Visibility="{Binding MediumPriority.Count, Converter={StaticResource CountToVisibility}}" />
-                    <ItemsControl ItemsSource="{Binding MediumPriority}"
-                                  ItemTemplate="{StaticResource NoteItemTemplate}" />
+                        <!-- Medium Priority -->
+                        <TextBlock Text="MEDIUM" Style="{StaticResource SecondaryText}"
+                                   Margin="4,12,0,4"
+                                   Visibility="{Binding MediumPriority.Count, Converter={StaticResource CountToVisibility}}" />
+                        <ItemsControl ItemsSource="{Binding MediumPriority}"
+                                      ItemTemplate="{StaticResource NoteItemTemplate}" />
 
-                    <!-- Low Priority -->
-                    <TextBlock Text="LOW" Style="{StaticResource SecondaryText}"
-                               Margin="4,12,0,4"
-                               Visibility="{Binding LowPriority.Count, Converter={StaticResource CountToVisibility}}" />
-                    <ItemsControl ItemsSource="{Binding LowPriority}"
-                                  ItemTemplate="{StaticResource NoteItemTemplate}" />
-                </StackPanel>
+                        <!-- Low Priority -->
+                        <TextBlock Text="LOW" Style="{StaticResource SecondaryText}"
+                                   Margin="4,12,0,4"
+                                   Visibility="{Binding LowPriority.Count, Converter={StaticResource CountToVisibility}}" />
+                        <ItemsControl ItemsSource="{Binding LowPriority}"
+                                      ItemTemplate="{StaticResource NoteItemTemplate}" />
+                    </StackPanel>
+
+                    <!-- Project Group View -->
+                    <ItemsControl ItemsSource="{Binding ProjectGroups}"
+                                  Visibility="{Binding GroupByProject, Converter={StaticResource BoolToVisibility}}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Margin="0,4,0,0">
+                                    <!-- Project header -->
+                                    <Border Margin="0,4,0,6" Padding="0,0,0,4"
+                                            BorderThickness="0,0,0,2"
+                                            BorderBrush="{Binding ColorBrush}">
+                                        <TextBlock Text="{Binding Name}"
+                                                   Foreground="{Binding ColorBrush}"
+                                                   FontSize="12" FontWeight="SemiBold"
+                                                   FontFamily="Segoe UI"
+                                                   Margin="4,0,0,0" />
+                                    </Border>
+                                    <!-- Notes in this project -->
+                                    <ItemsControl ItemsSource="{Binding Notes}"
+                                                  ItemTemplate="{StaticResource NoteItemTemplate}" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </Grid>
             </ScrollViewer>
+
+            <!-- Selection Action Bar -->
+            <Border Grid.Row="3"
+                    Padding="12,8"
+                    Background="{DynamicResource BgSecondaryBrush}"
+                    BorderBrush="{DynamicResource BorderSubtleBrush}"
+                    BorderThickness="0,1,0,0"
+                    Visibility="{Binding IsSelectMode, Converter={StaticResource BoolToVisibility}}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0"
+                               Style="{StaticResource SecondaryText}"
+                               VerticalAlignment="Center">
+                        <Run Text="{Binding SelectedCount, Mode=OneWay}" />
+                        <Run Text=" selected" />
+                    </TextBlock>
+                    <Button Grid.Column="1"
+                            Content="Export to Word"
+                            Style="{StaticResource SubtleButton}"
+                            Foreground="{DynamicResource AccentBlueBrush}"
+                            Command="{Binding ExportSelectedCommand}" />
+                </Grid>
+            </Border>
         </Grid>
     </Border>
 </Window>
