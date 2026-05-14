@@ -16,6 +16,15 @@ public partial class MainPanelWindow : Window
     {
         InitializeComponent();
         PositionTopRight();
+        DataContextChanged += (_, _) => RefreshCloseButtonTooltip();
+        Loaded += (_, _) => RefreshCloseButtonTooltip();
+    }
+
+    private void RefreshCloseButtonTooltip()
+    {
+        if (DataContext is not MainViewModel mainVm) return;
+        var behavior = mainVm.SettingsService.Load().CloseBehavior;
+        CloseButton.ToolTip = behavior == "quit" ? "Quit JL Notes" : "Close to tray";
     }
 
     private void PositionTopRight()
@@ -67,14 +76,26 @@ public partial class MainPanelWindow : Window
 
     private void ToggleMaximize()
     {
-        if (!_isMaximized)
+        // If Windows itself maximized us (Win+Up etc.), drop back to Normal so we own the geometry.
+        if (WindowState != WindowState.Normal)
+            WindowState = WindowState.Normal;
+
+        var workArea = SystemParameters.WorkArea;
+
+        // Detect maximized state from actual geometry, not a tracked flag — survives drag/OS resize desync.
+        bool atWorkAreaSize =
+            Math.Abs(Left - workArea.Left) < 1 &&
+            Math.Abs(Top - workArea.Top) < 1 &&
+            Math.Abs(Width - workArea.Width) < 1 &&
+            Math.Abs(Height - workArea.Height) < 1;
+
+        if (!atWorkAreaSize)
         {
             _restoreLeft = Left;
             _restoreTop = Top;
             _restoreWidth = Width;
             _restoreHeight = Height;
 
-            var workArea = SystemParameters.WorkArea;
             Left = workArea.Left;
             Top = workArea.Top;
             Width = workArea.Width;
@@ -83,6 +104,15 @@ public partial class MainPanelWindow : Window
         }
         else
         {
+            // Guard against uninitialized restore values (e.g., first toggle after Win+Up).
+            if (_restoreWidth < MinWidth || _restoreHeight < MinHeight)
+            {
+                _restoreWidth = 380;
+                _restoreHeight = 550;
+                _restoreLeft = workArea.Right - _restoreWidth - 16;
+                _restoreTop = workArea.Top + 16;
+            }
+
             Left = _restoreLeft;
             Top = _restoreTop;
             Width = _restoreWidth;
@@ -95,13 +125,18 @@ public partial class MainPanelWindow : Window
     private void UpdateMaximizeButton()
     {
         MaximizeButton.Content = _isMaximized ? "\U0001F5D7" : "\U0001F5D6";
+        MaximizeButton.ToolTip = _isMaximized ? "Restore Down" : "Maximize";
     }
 
     private void Settings_Click(object sender, RoutedEventArgs e)
     {
         if (DataContext is not MainViewModel mainVm) return;
         var settingsWindow = new SettingsWindow(mainVm.SettingsService, mainVm.ProjectService) { Owner = this };
-        settingsWindow.SettingsChanged += () => mainVm.RefreshNotes();
+        settingsWindow.SettingsChanged += () =>
+        {
+            mainVm.RefreshNotes();
+            RefreshCloseButtonTooltip();
+        };
         settingsWindow.ShowDialog();
     }
 
@@ -149,9 +184,26 @@ public partial class MainPanelWindow : Window
     {
         if (DataContext is not MainViewModel mainVm) return;
 
-        if (e.Key == Key.Escape)
+        if (e.Key == Key.F && Keyboard.Modifiers == ModifierKeys.Control)
         {
-            mainVm.CollapseAll();
+            SearchBox.Focus();
+            SearchBox.SelectAll();
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Escape)
+        {
+            // If the search box has focus, Esc clears/blurs it instead of collapsing notes.
+            if (SearchBox.IsKeyboardFocusWithin)
+            {
+                if (!string.IsNullOrEmpty(mainVm.SearchText))
+                    mainVm.SearchText = "";
+                else
+                    Keyboard.ClearFocus();
+            }
+            else
+            {
+                mainVm.CollapseAll();
+            }
             e.Handled = true;
         }
         else if (e.Key == Key.S && Keyboard.Modifiers == ModifierKeys.Control)

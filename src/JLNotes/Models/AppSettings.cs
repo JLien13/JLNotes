@@ -16,8 +16,8 @@ public class AppSettings
     [JsonPropertyName("customLabels")]
     public List<string> CustomLabels { get; set; } = [];
 
-    [JsonPropertyName("showCompleted")]
-    public bool ShowCompleted { get; set; } = true;
+    [JsonPropertyName("statusFilter")]
+    public string StatusFilter { get; set; } = "all";
 
     [JsonPropertyName("theme")]
     public string Theme { get; set; } = "dark";
@@ -33,6 +33,9 @@ public class AppSettings
 
     [JsonPropertyName("groupByProject")]
     public bool GroupByProject { get; set; } = false;
+
+    [JsonPropertyName("sortByDate")]
+    public bool SortByDate { get; set; } = false;
 }
 
 public class WindowPosition

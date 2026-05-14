@@ -72,7 +72,7 @@
                             Click="Maximize_Click"
                             ToolTip="Maximize" />
 
-                    <Button Grid.Column="5" Content="x" Style="{StaticResource SubtleButton}"
+                    <Button Grid.Column="5" x:Name="CloseButton" Content="x" Style="{StaticResource SubtleButton}"
                             FontSize="14"
                             Click="Close_Click"
                             ToolTip="Close to tray" />
@@ -87,27 +87,46 @@
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <TextBox Grid.Column="0"
-                             Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
-                             Background="{DynamicResource BgSecondaryBrush}"
-                             Foreground="{DynamicResource TextPrimaryBrush}"
-                             BorderBrush="{DynamicResource BorderSubtleBrush}"
-                             FontFamily="Segoe UI" FontSize="14"
-                             Padding="8,5"
-                             Tag="Search notes..."
-                             Style="{StaticResource SearchBox}" />
+                    <Grid Grid.Column="0">
+                        <TextBox x:Name="SearchBox"
+                                 Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                                 Background="{DynamicResource BgSecondaryBrush}"
+                                 Foreground="{DynamicResource TextPrimaryBrush}"
+                                 BorderBrush="{DynamicResource BorderSubtleBrush}"
+                                 FontFamily="Segoe UI" FontSize="14"
+                                 Padding="8,5,26,5"
+                                 Tag="Search notes..."
+                                 Style="{StaticResource SearchBox}" />
+                        <Button Content="&#x2715;"
+                                Width="20" Height="20"
+                                HorizontalAlignment="Right" VerticalAlignment="Center"
+                                Margin="0,0,4,0"
+                                Padding="0"
+                                Style="{StaticResource SubtleButton}"
+                                FontSize="11"
+                                Visibility="{Binding HasSearchText, Converter={StaticResource BoolToVisibility}}"
+                                Command="{Binding ClearSearchCommand}"
+                                ToolTip="Clear search (Esc)" />
+                    </Grid>
                     <StackPanel Grid.Column="1" Orientation="Horizontal">
-                        <ToggleButton IsChecked="{Binding ShowCompleted}"
-                                      ToolTip="Show completed"
-                                      Style="{StaticResource SubtleToggleButton}"
-                                      Content="&#x2713;"
-                                      FontSize="14"
-                                      Margin="6,0,0,0"
-                                      Padding="4,2" />
+                        <Button Command="{Binding CycleStatusFilterCommand}"
+                                Content="{Binding StatusFilterIcon}"
+                                ToolTip="{Binding StatusFilterTooltip}"
+                                Style="{StaticResource SubtleButton}"
+                                FontSize="14"
+                                Margin="6,0,0,0"
+                                Padding="4,2" />
                         <ToggleButton IsChecked="{Binding GroupByProject}"
                                       ToolTip="Group by project"
                                       Style="{StaticResource SubtleToggleButton}"
                                       Content="&#x25A6;"
+                                      FontSize="14"
+                                      Margin="4,0,0,0"
+                                      Padding="4,2" />
+                        <ToggleButton IsChecked="{Binding SortByDate}"
+                                      ToolTip="Sort by date created (newest first)"
+                                      Style="{StaticResource SubtleToggleButton}"
+                                      Content="&#x1F551;"
                                       FontSize="14"
                                       Margin="4,0,0,0"
                                       Padding="4,2" />
@@ -128,8 +147,23 @@
                           Padding="8"
                           PreviewMouseWheel="ScrollViewer_PreviewMouseWheel">
                 <Grid>
+                    <!-- Empty state -->
+                    <TextBlock Text="{Binding EmptyMessage}"
+                               Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibility}}"
+                               Style="{StaticResource SecondaryText}"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Top"
+                               Margin="0,48,0,0"
+                               TextWrapping="Wrap"
+                               TextAlignment="Center"
+                               FontStyle="Italic" />
+                    <!-- Date-sorted flat list -->
+                    <ItemsControl ItemsSource="{Binding SortedByDate}"
+                                  ItemTemplate="{StaticResource NoteItemTemplate}"
+                                  Visibility="{Binding ShowDateView, Converter={StaticResource BoolToVisibility}}" />
+
                     <!-- Priority View (default) -->
-                    <StackPanel Visibility="{Binding GroupByProject, Converter={StaticResource InverseBoolToVisibility}}">
+                    <StackPanel Visibility="{Binding ShowPriorityView, Converter={StaticResource BoolToVisibility}}">
                         <!-- High Priority -->
                         <TextBlock Text="HIGH" Style="{StaticResource SecondaryText}"
                                    Margin="4,8,0,4"
@@ -154,7 +188,7 @@
 
                     <!-- Project Group View -->
                     <ItemsControl ItemsSource="{Binding ProjectGroups}"
-                                  Visibility="{Binding GroupByProject, Converter={StaticResource BoolToVisibility}}">
+                                  Visibility="{Binding ShowProjectView, Converter={StaticResource BoolToVisibility}}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
                                 <StackPanel Margin="0,4,0,0">

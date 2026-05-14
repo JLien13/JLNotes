@@ -258,6 +258,24 @@ public partial class NoteItemViewModel : ObservableObject
     }
 
     [RelayCommand]
+    private void CopyPath()
+    {
+        try { System.Windows.Clipboard.SetText(_note.FilePath); } catch { /* clipboard contention */ }
+    }
+
+    [RelayCommand]
+    private void RevealInExplorer()
+    {
+        if (!System.IO.File.Exists(_note.FilePath)) return;
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = "explorer.exe",
+            Arguments = $"/select,\"{_note.FilePath}\"",
+            UseShellExecute = true
+        });
+    }
+
+    [RelayCommand]
     private void ExportToWord()
     {
         var dialog = new Microsoft.Win32.SaveFileDialog

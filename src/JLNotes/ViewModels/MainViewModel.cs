@@ -21,7 +21,7 @@ public partial class MainViewModel : ObservableObject
     private string _selectedProject = "Projects";
 
     [ObservableProperty]
-    private bool _showCompleted;
+    private string _statusFilter = "all";
 
     [ObservableProperty]
     private string _searchText = "";
@@ -30,22 +30,55 @@ public partial class MainViewModel : ObservableObject
     private bool _groupByProject;
 
     [ObservableProperty]
+    private bool _sortByDate;
+
+    [ObservableProperty]
     private bool _isSelectMode;
 
     public ObservableCollection<NoteItemViewModel> HighPriority { get; } = [];
     public ObservableCollection<NoteItemViewModel> MediumPriority { get; } = [];
     public ObservableCollection<NoteItemViewModel> LowPriority { get; } = [];
+    public ObservableCollection<NoteItemViewModel> SortedByDate { get; } = [];
     public ObservableCollection<ProjectGroupViewModel> ProjectGroups { get; } = [];
     public ObservableCollection<string> Projects { get; } = ["Projects"];
+
+    public bool ShowDateView => SortByDate;
+    public bool ShowProjectView => !SortByDate && GroupByProject;
+    public bool ShowPriorityView => !SortByDate && !GroupByProject;
+
+    public bool HasSearchText => !string.IsNullOrEmpty(SearchText);
+
+    public string StatusFilterIcon => StatusFilter switch
+    {
+        "open" => "○",  // ○
+        "done" => "●",  // ●
+        _ => "◐"        // ◐ = all
+    };
+
+    public string StatusFilterTooltip => StatusFilter switch
+    {
+        "open" => "Showing: Open only — click for Done only",
+        "done" => "Showing: Done only — click for All",
+        _ => "Showing: All — click for Open only"
+    };
+
+    private int _filteredCount;
+    public bool IsEmpty => _filteredCount == 0;
+    public string EmptyMessage =>
+        HasSearchText ? $"No notes match “{SearchText}”"
+        : _cachedNotes.Count == 0 ? "No notes yet — hit + to add one"
+        : "Nothing here — try toggling filters";
 
     public NoteService NoteService => _noteService;
     public ProjectService ProjectService => _projectService;
     public SettingsService SettingsService => _settingsService;
 
     private IEnumerable<NoteItemViewModel> AllNoteViewModels =>
-        GroupByProject
-            ? ProjectGroups.SelectMany(pg => pg.Notes)
-            : HighPriority.Concat(MediumPriority).Concat(LowPriority);
+        SortByDate
+            ? SortedByDate
+            : GroupByProject
+                ? ProjectGroups.SelectMany(pg => pg.Notes)
+                : HighPriority.Concat(MediumPriority).Concat(LowPriority);
 
     public int SelectedCount => AllNoteViewModels.Count(vm => vm.IsSelected);
 
@@ -56,8 +89,9 @@ public partial class MainViewModel : ObservableObject
         _settingsService = settingsService;
 
         var settings = settingsService.Load();
-        _showCompleted = settings.ShowCompleted;
+        _statusFilter = NormalizeStatusFilter(settings.StatusFilter);
         _groupByProject = settings.GroupByProject;
+        _sortByDate = settings.SortByDate;
         RefreshNotes();
 
         _noteService.NotesChanged += () =>
@@ -112,7 +146,12 @@ public partial class MainViewModel : ObservableObject
     {
         var filtered = _cachedNotes.Where(n =>
             (SelectedProject == "Projects" || n.Project == SelectedProject) &&
-            (ShowCompleted || n.Status != NoteStatus.Done) &&
+            StatusFilter switch
+            {
+                "open" => n.Status != NoteStatus.Done,
+                "done" => n.Status == NoteStatus.Done,
+                _ => true
+            } &&
             (string.IsNullOrEmpty(SearchText) ||
              n.Title.Contains(SearchText, StringComparison.OrdinalIgnoreCase) ||
              n.Body.Contains(SearchText, StringComparison.OrdinalIgnoreCase) ||
@@ -122,7 +161,12 @@ public partial class MainViewModel : ObservableObject
         RebuildGroup(HighPriority, filtered.Where(n => n.Priority == NotePriority.High));
         RebuildGroup(MediumPriority, filtered.Where(n => n.Priority == NotePriority.Medium));
         RebuildGroup(LowPriority, filtered.Where(n => n.Priority == NotePriority.Low));
+        RebuildGroup(SortedByDate, filtered.OrderByDescending(n => n.Created));
         RebuildProjectGroups(filtered);
+
+        _filteredCount = filtered.Count;
+        OnPropertyChanged(nameof(IsEmpty));
+        OnPropertyChanged(nameof(EmptyMessage));
     }
 
     private void RebuildProjectGroups(List<Note> filtered)
@@ -239,29 +283,61 @@ public partial class MainViewModel : ObservableObject
     }
 
     partial void OnSelectedProjectChanged(string value) => RefreshNotes();
-    partial void OnShowCompletedChanged(bool value)
+    partial void OnStatusFilterChanged(string value)
     {
         var settings = _settingsService.Load();
-        settings.ShowCompleted = value;
+        settings.StatusFilter = value;
         _settingsService.Save(settings);
+        OnPropertyChanged(nameof(StatusFilterIcon));
+        OnPropertyChanged(nameof(StatusFilterTooltip));
         RefreshNotes();
     }
+
+    [RelayCommand]
+    private void CycleStatusFilter()
+    {
+        StatusFilter = StatusFilter switch
+        {
+            "all" => "open",
+            "open" => "done",
+            _ => "all"
+        };
+    }
+
+    private static string NormalizeStatusFilter(string? value) =>
+        value is "open" or "done" or "all" ? value : "all";
     partial void OnSearchTextChanged(string value)
     {
+        OnPropertyChanged(nameof(HasSearchText));
         _searchDebounce!.Stop();
         _searchDebounce.Start();
     }
+
+    [RelayCommand]
+    private void ClearSearch() => SearchText = "";
     partial void OnGroupByProjectChanged(bool value)
     {
         var settings = _settingsService.Load();
         settings.GroupByProject = value;
         _settingsService.Save(settings);
+        OnPropertyChanged(nameof(ShowProjectView));
+        OnPropertyChanged(nameof(ShowPriorityView));
+        RefreshNotes();
+    }
+    partial void OnSortByDateChanged(bool value)
+    {
+        var settings = _settingsService.Load();
+        settings.SortByDate = value;
+        _settingsService.Save(settings);
+        OnPropertyChanged(nameof(ShowDateView));
+        OnPropertyChanged(nameof(ShowProjectView));
+        OnPropertyChanged(nameof(ShowPriorityView));
         RefreshNotes();
     }
 
     partial void OnIsSelectModeChanged(bool value)
     {
-        foreach (var vm in HighPriority.Concat(MediumPriority).Concat(LowPriority))
+        foreach (var vm in HighPriority.Concat(MediumPriority).Concat(LowPriority).Concat(SortedByDate))
         {
             vm.IsSelectMode = value;
             if (!value) vm.IsSelected = false;
