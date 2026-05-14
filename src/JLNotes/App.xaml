@@ -37,6 +37,9 @@
                             <MenuItem Header="Open in Claude" Command="{Binding OpenInClaudeCommand}" />
                             <MenuItem Header="Export to Word" Command="{Binding ExportToWordCommand}" />
                             <Separator />
+                            <MenuItem Header="Copy Path" Command="{Binding CopyPathCommand}" />
+                            <MenuItem Header="Reveal in Explorer" Command="{Binding RevealInExplorerCommand}" />
+                            <Separator />
                             <MenuItem Header="Delete" Command="{Binding DeleteCommand}" />
                         </ContextMenu>
                     </Border.ContextMenu>
