@@ -11,13 +11,54 @@ public partial class MainPanelWindow : Window
     private double _restoreLeft, _restoreTop, _restoreWidth, _restoreHeight;
     private bool _isMaximized;
     private bool _headerDragging;
+    private double? _widthBeforeSplit;
 
     public MainPanelWindow()
     {
         InitializeComponent();
         PositionTopRight();
-        DataContextChanged += (_, _) => RefreshCloseButtonTooltip();
+        DataContextChanged += OnDataContextChanged;
         Loaded += (_, _) => RefreshCloseButtonTooltip();
+    }
+
+    private void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
+    {
+        RefreshCloseButtonTooltip();
+        if (e.OldValue is MainViewModel oldVm)
+            oldVm.PropertyChanged -= MainVm_PropertyChanged;
+        if (e.NewValue is MainViewModel newVm)
+        {
+            newVm.PropertyChanged += MainVm_PropertyChanged;
+            ApplySplitWidth(newVm); // handle starting up already in split view
+        }
+    }
+
+    private void MainVm_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(MainViewModel.ViewMode) && DataContext is MainViewModel vm)
+            ApplySplitWidth(vm);
+    }
+
+    // Split view needs room for two panes; grow the panel on entry, restore on exit.
+    private void ApplySplitWidth(MainViewModel vm)
+    {
+        if (WindowState != WindowState.Normal) return; // don't fight maximize
+        var wa = SystemParameters.WorkArea;
+        if (vm.IsSplitLayout)
+        {
+            if (_widthBeforeSplit == null && Width < 760)
+            {
+                _widthBeforeSplit = Width;
+                Width = Math.Min(880, wa.Width - 32);
+            }
+        }
+        else if (_widthBeforeSplit is double prior)
+        {
+            Width = prior;
+            _widthBeforeSplit = null;
+        }
+        // Keep the panel fully on-screen after any width change.
+        Left = Math.Max(wa.Left + 16, Math.Min(Left, wa.Right - Width - 16));
     }
 
     private void RefreshCloseButtonTooltip()
