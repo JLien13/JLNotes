@@ -286,4 +286,29 @@
             </Setter.Value>
         </Setter>
     </Style>
+
+    <!-- Split-view left-rail row container: transparent, hover + selected states. -->
+    <Style x:Key="SplitListItem" TargetType="ListBoxItem">
+        <Setter Property="Margin" Value="0,1" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ListBoxItem">
+                    <Border x:Name="Bd" Background="Transparent" CornerRadius="4">
+                        <ContentPresenter />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource BgSecondaryBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource BgTertiaryBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
 </ResourceDictionary>
