@@ -148,7 +148,7 @@ public partial class MainPanelWindow : Window
             // Guard against uninitialized restore values (e.g., first toggle after Win+Up).
             if (_restoreWidth < MinWidth || _restoreHeight < MinHeight)
             {
-                _restoreWidth = 380;
+                _restoreWidth = 480;
                 _restoreHeight = 550;
                 _restoreLeft = workArea.Right - _restoreWidth - 16;
                 _restoreTop = workArea.Top + 16;

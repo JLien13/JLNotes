@@ -142,6 +142,25 @@ var
   // CurUninstallStepChanged to actually delete the notes folder.
   WipeNotes: Boolean;
 
+{ ---------- shell icon-cache refresh (taskbar / desktop / Start) ---------- }
+// On an upgrade the .exe and tray.ico are replaced, but Windows keeps painting
+// the OLD cached icon on pinned taskbar buttons and existing shortcuts until the
+// shell is told to re-read them. (Inno already overwrites the Start Menu / desktop
+// shortcuts and force-closes the running tray app before copying files; this is the
+// remaining gap.) SHChangeNotify(SHCNE_ASSOCCHANGED) forces Explorer to refresh
+// icons so the current JL Notes mark shows up everywhere -- no sign-out needed.
+const
+  SHCNE_ASSOCCHANGED = $08000000;
+  SHCNF_IDLIST       = $0000;
+
+procedure SHChangeNotify(wEventId: Integer; uFlags: Cardinal; dwItem1, dwItem2: Cardinal);
+  external 'SHChangeNotify@shell32.dll stdcall';
+
+procedure RefreshShellIcons();
+begin
+  SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, 0, 0);
+end;
+
 { ---------- .NET runtime detection ---------- }
 
 function IsDotNetInstalled: Boolean;
@@ -296,6 +315,13 @@ begin
   Result := '';
 end;
 
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  // Files are in place -- nudge Explorer to drop stale shortcut / taskbar icons.
+  if CurStep = ssPostInstall then
+    RefreshShellIcons();
+end;
+
 { ---------- .NET runtime download on the Ready page ---------- }
 
 function NextButtonClick(CurPageID: Integer): Boolean;
@@ -444,9 +470,13 @@ var
   NotesDir: String;
 begin
   if CurUninstallStep = usPostUninstall then
+  begin
     if WipeNotes then
     begin
       NotesDir := ExpandConstant('{%USERPROFILE%}') + NotesSubPath;
       DelTree(NotesDir, True, True, True);
     end;
+    // Clear the removed shortcuts' icons from the shell cache too.
+    RefreshShellIcons();
+  end;
 end;
