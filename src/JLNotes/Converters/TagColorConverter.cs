@@ -4,9 +4,13 @@ using System.Windows.Media;
 
 namespace JLNotes.Converters;
 
-public class TagColorConverter : IValueConverter
+/// <summary>
+/// Single source of truth for tag colors: the palette and the stable
+/// tag-to-color mapping shared by every tag converter.
+/// </summary>
+internal static class TagPalette
 {
-    private static readonly Color[] TagColors =
+    private static readonly Color[] Colors =
     [
         Color.FromRgb(0x4A, 0x9E, 0xFF), // blue
         Color.FromRgb(0x34, 0xD3, 0x99), // green
@@ -18,18 +22,9 @@ public class TagColorConverter : IValueConverter
         Color.FromRgb(0xEF, 0x44, 0x44), // red
     ];
 
-    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-    {
-        if (value is not string tag || string.IsNullOrWhiteSpace(tag))
-            return Brushes.Gray;
-
-        var index = Math.Abs(StableHash(tag)) % TagColors.Length;
-        var color = TagColors[index];
-        return new SolidColorBrush(Color.FromArgb(0x40, color.R, color.G, color.B));
-    }
-
-    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-        => throw new NotSupportedException();
+    /// <summary>Deterministic color for a tag: same tag -> same color across runs.</summary>
+    public static Color ColorFor(string tag)
+        => Colors[Math.Abs(StableHash(tag)) % Colors.Length];
 
     private static int StableHash(string s)
     {
@@ -43,40 +38,33 @@ public class TagColorConverter : IValueConverter
     }
 }
 
-public class TagTextColorConverter : IValueConverter
+/// <summary>Translucent background fill for a tag chip.</summary>
+public class TagColorConverter : IValueConverter
 {
-    private static readonly Color[] TagColors =
-    [
-        Color.FromRgb(0x4A, 0x9E, 0xFF),
-        Color.FromRgb(0x34, 0xD3, 0x99),
-        Color.FromRgb(0xF5, 0x9E, 0x0B),
-        Color.FromRgb(0xA7, 0x8B, 0xFA),
-        Color.FromRgb(0xEC, 0x48, 0x99),
-        Color.FromRgb(0x06, 0xB6, 0xD4),
-        Color.FromRgb(0x84, 0xCC, 0x16),
-        Color.FromRgb(0xEF, 0x44, 0x44),
-    ];
-
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
     {
         if (value is not string tag || string.IsNullOrWhiteSpace(tag))
             return Brushes.Gray;
 
-        var index = Math.Abs(StableHash(tag)) % TagColors.Length;
-        return new SolidColorBrush(TagColors[index]);
+        var color = TagPalette.ColorFor(tag);
+        return new SolidColorBrush(Color.FromArgb(0x40, color.R, color.G, color.B));
     }
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
         => throw new NotSupportedException();
+}
 
-    private static int StableHash(string s)
+/// <summary>Full-strength text/foreground color for a tag chip.</summary>
+public class TagTextColorConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
     {
-        unchecked
-        {
-            int hash = 17;
-            foreach (char c in s)
-                hash = hash * 31 + c;
-            return hash;
-        }
+        if (value is not string tag || string.IsNullOrWhiteSpace(tag))
+            return Brushes.Gray;
+
+        return new SolidColorBrush(TagPalette.ColorFor(tag));
     }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotSupportedException();
 }

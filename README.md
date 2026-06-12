@@ -16,7 +16,7 @@ A lightweight WPF sticky-notes app that integrates with Claude Code via shared m
 
 ## How It Works
 
-JL Notes watches a folder of markdown files (`~/.claude-notes/notes/`). Each note is a `.md` file with YAML frontmatter:
+JL Notes watches a folder of markdown files (`~/.jlnotes/notes/`). Each note is a `.md` file with YAML frontmatter:
 
 ```markdown
 ---
@@ -55,12 +55,17 @@ dotnet build src/JLNotes/JLNotes.csproj
 
 Requires [Inno Setup 6](https://jrsoftware.org/isinfo.php).
 
-```bash
-dotnet publish src/JLNotes/JLNotes.csproj -c Release -r win-x64 --self-contained false -o publish
-iscc installer/setup.iss
+The build is a single script that publishes the app and compiles the installer:
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File installer/build.ps1
 ```
 
-The installer will be output to `output/JLNotes-Setup.exe`.
+The version comes from `<Version>` in `src/JLNotes/JLNotes.csproj` (the single
+source of truth); pass `-Version X.Y.Z` to override, or `-SkipPublish` to reuse
+an existing `publish/` folder.
+
+The installer is output to `installer/Output/JLNotes-Setup-<version>.exe`.
 
 ## License
 
