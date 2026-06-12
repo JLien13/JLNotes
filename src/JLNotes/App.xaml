@@ -241,78 +241,55 @@
                 </Border>
             </DataTemplate>
 
-            <!-- Split view: right detail pane. Reads in rendered mode; the Edit
-                 button flips to the shared NoteEditorTemplate. DataContext = the
-                 selected NoteItemViewModel. -->
+            <!-- Split view: right detail pane. Always editable in place — the
+                 title and body read exactly like the rendered note but edit
+                 directly (no Edit button, no mode switch). Edits auto-commit on
+                 note switch / blur / close via MainViewModel.CommitSplitEdit.
+                 DataContext = the selected NoteItemViewModel. -->
             <DataTemplate x:Key="NoteDetailTemplate">
                 <Grid Margin="16,14">
-                    <!-- READ MODE: fixed header, scrolling body -->
-                    <Grid Visibility="{Binding IsExpanded, Converter={StaticResource InverseBoolToVisibility}}">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="*" />
-                        </Grid.RowDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
 
-                        <!-- Title + Edit -->
-                        <Grid Grid.Row="0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="{Binding Title}"
-                                       Foreground="{DynamicResource TextPrimaryBrush}"
-                                       FontFamily="Segoe UI" FontSize="20" FontWeight="SemiBold"
-                                       TextWrapping="Wrap" VerticalAlignment="Center" />
-                            <Button Grid.Column="1" Content="Edit"
-                                    Style="{StaticResource SubtleButton}"
-                                    Foreground="{DynamicResource AccentBlueBrush}"
-                                    VerticalAlignment="Top" Margin="8,0,0,0"
-                                    Command="{Binding ToggleExpandCommand}" />
-                        </Grid>
+                    <!-- Title — editable in place, styled like the rendered title -->
+                    <TextBox Grid.Row="0"
+                             Style="{StaticResource InPlaceTitleBox}"
+                             Text="{Binding EditTitle, UpdateSourceTrigger=PropertyChanged}" />
 
-                        <!-- Meta + tags -->
-                        <StackPanel Grid.Row="1" Margin="0,4,0,0">
-                            <TextBlock Style="{StaticResource SecondaryText}">
-                                <Run Text="{Binding Project, Mode=OneWay}" />
-                                <Run Text="   ·   " />
-                                <Run Text="{Binding TimeAgo, Mode=OneWay}" />
-                            </TextBlock>
-                            <ItemsControl ItemsSource="{Binding Tags}"
-                                          Visibility="{Binding HasTags, Converter={StaticResource BoolToVisibility}}"
-                                          Margin="0,8,0,0">
-                                <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Border Background="{Binding Converter={StaticResource TagColor}}"
-                                                CornerRadius="3" Padding="5,1" Margin="0,0,4,4">
-                                            <TextBlock Text="{Binding}"
-                                                       Foreground="{Binding Converter={StaticResource TagTextColor}}"
-                                                       FontSize="10" FontFamily="Segoe UI" />
-                                        </Border>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                            <Border Height="1" Background="{DynamicResource BorderSubtleBrush}" Margin="0,12,0,0" />
-                        </StackPanel>
+                    <!-- Meta + tags (display) -->
+                    <StackPanel Grid.Row="1" Margin="0,4,0,0">
+                        <TextBlock Style="{StaticResource SecondaryText}">
+                            <Run Text="{Binding Project, Mode=OneWay}" />
+                            <Run Text="   ·   " />
+                            <Run Text="{Binding TimeAgo, Mode=OneWay}" />
+                        </TextBlock>
+                        <ItemsControl ItemsSource="{Binding Tags}"
+                                      Visibility="{Binding HasTags, Converter={StaticResource BoolToVisibility}}"
+                                      Margin="0,8,0,0">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Background="{Binding Converter={StaticResource TagColor}}"
+                                            CornerRadius="3" Padding="5,1" Margin="0,0,4,4">
+                                        <TextBlock Text="{Binding}"
+                                                   Foreground="{Binding Converter={StaticResource TagTextColor}}"
+                                                   FontSize="10" FontFamily="Segoe UI" />
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <Border Height="1" Background="{DynamicResource BorderSubtleBrush}" Margin="0,12,0,0" />
+                    </StackPanel>
 
-                        <!-- Rendered body -->
-                        <FlowDocumentScrollViewer Grid.Row="2" Margin="0,10,0,0"
-                                                  Document="{Binding ReadDocument}"
-                                                  IsToolBarVisible="False"
-                                                  Background="Transparent"
-                                                  VerticalScrollBarVisibility="Auto"
-                                                  HorizontalScrollBarVisibility="Disabled"
-                                                  Padding="0" />
-                    </Grid>
-
-                    <!-- EDIT MODE: reuse the shared editor -->
-                    <ScrollViewer Visibility="{Binding IsExpanded, Converter={StaticResource BoolToVisibility}}"
-                                  VerticalScrollBarVisibility="Auto">
-                        <ContentControl Content="{Binding}" ContentTemplate="{StaticResource NoteEditorTemplate}" />
-                    </ScrollViewer>
+                    <!-- Body — editable in place, styled like the rendered body -->
+                    <RichTextBox Grid.Row="2" Margin="0,10,0,0"
+                                 Style="{StaticResource InPlaceBodyBox}"
+                                 behaviors:RichTextBoxBehavior.Document="{Binding EditDocument}" />
                 </Grid>
             </DataTemplate>
         </ResourceDictionary>
