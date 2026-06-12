@@ -9,6 +9,13 @@ public class NoteService : IDisposable
     private readonly string _attachmentsBaseDir;
     private FileSystemWatcher? _watcher;
 
+    // Paths this process just wrote, with the time of the write. The watcher
+    // skips Changed events for these so the app's OWN saves don't trigger a
+    // full reload-from-disk — that reload is what made editing then clicking
+    // another note feel laggy. External edits (e.g. Claude) still refresh.
+    private readonly Dictionary<string, DateTime> _selfWrites = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly TimeSpan SelfWriteWindow = TimeSpan.FromSeconds(1);
+
     public event Action? NotesChanged;
 
     public NoteService(string notesDir)
@@ -56,6 +63,9 @@ public class NoteService : IDisposable
             note.FilePath = Path.Combine(_notesDir, fileName);
         }
         note.Updated = DateTime.Now;
+        // Record before writing: the watcher fires asynchronously and may beat
+        // the line after WriteAllText, so the entry must already be in place.
+        RecordSelfWrite(note.FilePath);
         File.WriteAllText(note.FilePath, note.ToMarkdown());
 
         // Rename attachments folder if slug changed
@@ -158,9 +168,28 @@ public class NoteService : IDisposable
             EnableRaisingEvents = true
         };
         _watcher.Created += (_, _) => NotesChanged?.Invoke();
-        _watcher.Changed += (_, _) => NotesChanged?.Invoke();
+        _watcher.Changed += (_, e) => { if (!IsSelfWrite(e.FullPath)) NotesChanged?.Invoke(); };
         _watcher.Deleted += (_, _) => NotesChanged?.Invoke();
         _watcher.Renamed += (_, _) => NotesChanged?.Invoke();
+    }
+
+    private void RecordSelfWrite(string path)
+    {
+        lock (_selfWrites)
+            _selfWrites[path] = DateTime.UtcNow;
+    }
+
+    // True if WE wrote this path within the suppression window. Consumes expired
+    // entries so the dictionary can't grow unbounded.
+    private bool IsSelfWrite(string path)
+    {
+        lock (_selfWrites)
+        {
+            if (_selfWrites.TryGetValue(path, out var when) && DateTime.UtcNow - when < SelfWriteWindow)
+                return true;
+            _selfWrites.Remove(path);
+            return false;
+        }
     }
 
     public void Dispose()
