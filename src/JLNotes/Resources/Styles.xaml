@@ -287,6 +287,55 @@
         </Setter>
     </Style>
 
+    <!-- In-place split-detail title editor: a chrome-less TextBox that reads
+         exactly like the rendered title (20px SemiBold) but is editable in place.
+         No border, no background, no padding — only a caret on focus differs. -->
+    <Style x:Key="InPlaceTitleBox" TargetType="TextBox">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+        <Setter Property="CaretBrush" Value="{DynamicResource TextPrimaryBrush}" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="FontFamily" Value="Segoe UI" />
+        <Setter Property="FontSize" Value="20" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+        <Setter Property="AcceptsReturn" Value="False" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="TextBox">
+                    <ScrollViewer x:Name="PART_ContentHost" Focusable="False"
+                                  HorizontalScrollBarVisibility="Hidden"
+                                  VerticalScrollBarVisibility="Hidden" />
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- In-place split-detail body editor: a chrome-less RichTextBox bound to the
+         same rendered FlowDocument the read view used, so it looks identical but
+         edits directly. No border/background; default scrollbar matches the prior
+         FlowDocumentScrollViewer. -->
+    <Style x:Key="InPlaceBodyBox" TargetType="RichTextBox">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+        <Setter Property="CaretBrush" Value="{DynamicResource TextPrimaryBrush}" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="AcceptsReturn" Value="True" />
+        <Setter Property="AllowDrop" Value="True" />
+        <Setter Property="VerticalScrollBarVisibility" Value="Auto" />
+        <Setter Property="HorizontalScrollBarVisibility" Value="Disabled" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="RichTextBox">
+                    <ScrollViewer x:Name="PART_ContentHost" Focusable="False"
+                                  Padding="{TemplateBinding Padding}" />
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <!-- Split-view left-rail row container: transparent, hover + selected states. -->
     <Style x:Key="SplitListItem" TargetType="ListBoxItem">
         <Setter Property="Margin" Value="0,1" />

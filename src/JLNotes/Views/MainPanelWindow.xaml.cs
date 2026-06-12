@@ -21,6 +21,14 @@ public partial class MainPanelWindow : Window
         Loaded += (_, _) => RefreshCloseButtonTooltip();
     }
 
+    // Losing focus (alt-tab, minimize, opening a dialog, close-to-tray) flushes
+    // the split detail pane's in-place edits. No-ops when nothing changed.
+    protected override void OnDeactivated(EventArgs e)
+    {
+        base.OnDeactivated(e);
+        (DataContext as MainViewModel)?.CommitSplitEdit();
+    }
+
     private void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
     {
         RefreshCloseButtonTooltip();
@@ -185,6 +193,7 @@ public partial class MainPanelWindow : Window
     {
         if (DataContext is MainViewModel mainVm)
         {
+            mainVm.CommitSplitEdit();
             var settings = mainVm.SettingsService.Load();
             if (settings.CloseBehavior == "quit")
             {

@@ -176,6 +176,47 @@ public partial class NoteItemViewModel : ObservableObject
         IsExpanded = false;
     }
 
+    // Baseline body (serialized) captured when the split detail editor is primed,
+    // so CommitSplitEdit can tell real edits from mere browsing.
+    private string? _splitEditBaseline;
+
+    /// <summary>Prime the split detail pane's in-place editor: load the title and
+    /// a freshly rendered body, then snapshot a baseline for change detection.</summary>
+    public void BeginSplitEdit()
+    {
+        EditTitle = _note.Title;
+        EditDocument = FlowDocumentHelper.BuildDocument(_note.Body, _noteService.GetAttachmentsDir(_note));
+        _splitEditBaseline = FlowDocumentHelper.SerializeDocument(EditDocument);
+    }
+
+    /// <summary>Persist the split detail pane's in-place edits — but only when the
+    /// title or body actually changed, so simply browsing notes never rewrites a
+    /// file or churns the list. Deliberately does NOT raise <see cref="NoteChanged"/>:
+    /// the file watcher drives the refresh, which keeps this re-entrancy-safe.</summary>
+    public void CommitSplitEdit()
+    {
+        if (EditDocument == null) return; // never primed → nothing to commit
+
+        var newBody = FlowDocumentHelper.SerializeDocument(EditDocument);
+        var newTitle = EditTitle ?? "";
+        var bodyChanged = newBody != _splitEditBaseline;
+        var titleChanged = newTitle != _note.Title;
+        if (!bodyChanged && !titleChanged) return;
+
+        if (titleChanged) _note.Title = newTitle;
+        if (bodyChanged)
+        {
+            _note.Body = newBody;
+            _note.Attachments = FlowDocumentHelper.GetAttachmentFilenames(EditDocument);
+        }
+        _noteService.Save(_note);
+        _splitEditBaseline = newBody;
+
+        OnPropertyChanged(nameof(Title));
+        OnPropertyChanged(nameof(Body));
+        OnPropertyChanged(nameof(ReadDocument));
+    }
+
     [RelayCommand]
     private void SetPriorityHigh() => SetPriority(NotePriority.High);
 
