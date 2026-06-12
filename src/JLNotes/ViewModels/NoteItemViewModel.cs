@@ -76,6 +76,11 @@ public partial class NoteItemViewModel : ObservableObject
     public bool ShowTags => SubtitleDisplay == "tags" && Tags.Count > 0;
     public bool ShowSubtitleText => SubtitleDisplay != "tags" && !string.IsNullOrEmpty(SubtitleText);
 
+    /// <summary>Read-only rendered body for the split-view detail pane. Built on
+    /// demand for the single selected note (cheap — one note, not the whole list).</summary>
+    public FlowDocument ReadDocument =>
+        FlowDocumentHelper.BuildDocument(_note.Body, _noteService.GetAttachmentsDir(_note));
+
     public bool IsDone
     {
         get => _note.Status == NoteStatus.Done;
@@ -161,6 +166,7 @@ public partial class NoteItemViewModel : ObservableObject
         OnPropertyChanged(nameof(Repo));
         OnPropertyChanged(nameof(Tags));
         OnPropertyChanged(nameof(HasTags));
+        OnPropertyChanged(nameof(ReadDocument));
         NoteChanged?.Invoke();
     }
 

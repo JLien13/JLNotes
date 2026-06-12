@@ -32,18 +32,44 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private bool _sortByDate;
 
+    // Layout mode for the note area: "list" | "grid" | "split". Chosen from the
+    // header View dropdown.
     [ObservableProperty]
-    private bool _isGridView;
+    private string _viewMode = "list";
 
     [ObservableProperty]
     private bool _isSelectMode;
+
+    // Split (master-detail) view: the note selected in the left rail, shown in
+    // the right reading/edit pane.
+    [ObservableProperty]
+    private NoteItemViewModel? _selectedSplitNote;
 
     public ObservableCollection<NoteItemViewModel> HighPriority { get; } = [];
     public ObservableCollection<NoteItemViewModel> MediumPriority { get; } = [];
     public ObservableCollection<NoteItemViewModel> LowPriority { get; } = [];
     public ObservableCollection<NoteItemViewModel> SortedByDate { get; } = [];
     public ObservableCollection<ProjectGroupViewModel> ProjectGroups { get; } = [];
+    // Flat, filtered note list backing the split view's left rail (virtualized).
+    public ObservableCollection<NoteItemViewModel> SplitNotes { get; } = [];
     public ObservableCollection<string> Projects { get; } = ["Projects"];
+
+    // Header View dropdown.
+    public string[] ViewModes { get; } = ["List", "Grid", "Split"];
+
+    public string SelectedViewMode
+    {
+        get => ViewMode switch { "grid" => "Grid", "split" => "Split", _ => "List" };
+        set => ViewMode = (value ?? "").ToLowerInvariant() switch
+        {
+            "grid" => "grid",
+            "split" => "split",
+            _ => "list"
+        };
+    }
+
+    public bool IsGridLayout => ViewMode == "grid";
+    public bool IsSplitLayout => ViewMode == "split";
 
     /// <summary>Header version label, e.g. "v1.2.0" — read from the assembly so it
     /// always tracks the csproj &lt;Version&gt; (single source of truth).</summary>
@@ -102,7 +128,10 @@ public partial class MainViewModel : ObservableObject
         _statusFilter = NormalizeStatusFilter(settings.StatusFilter);
         _groupByProject = settings.GroupByProject;
         _sortByDate = settings.SortByDate;
-        _isGridView = settings.GridView;
+        // Prefer the new viewMode; fall back to the legacy gridView flag.
+        _viewMode = !string.IsNullOrEmpty(settings.ViewMode)
+            ? settings.ViewMode
+            : settings.GridView ? "grid" : "list";
         RefreshNotes();
 
         _noteService.NotesChanged += () =>
@@ -174,6 +203,7 @@ public partial class MainViewModel : ObservableObject
         RebuildGroup(LowPriority, filtered.Where(n => n.Priority == NotePriority.Low));
         RebuildGroup(SortedByDate, filtered.OrderByDescending(n => n.Created));
         RebuildProjectGroups(filtered);
+        RebuildSplit(filtered);
 
         _filteredCount = filtered.Count;
         OnPropertyChanged(nameof(IsEmpty));
@@ -251,6 +281,41 @@ public partial class MainViewModel : ObservableObject
             };
             group.Add(vm);
         }
+    }
+
+    private void RebuildSplit(List<Note> filtered)
+    {
+        var ordered = SortByDate
+            ? filtered.OrderByDescending(n => n.Created)
+            : filtered
+                .OrderBy(n => n.Priority switch
+                {
+                    NotePriority.High => 0,
+                    NotePriority.Medium => 1,
+                    NotePriority.Low => 2,
+                    _ => 3
+                })
+                .ThenBy(n => n.SortOrder)
+                .ThenByDescending(n => n.Created);
+
+        var previousPath = SelectedSplitNote?.Note.FilePath;
+
+        SplitNotes.Clear();
+        foreach (var note in ordered)
+        {
+            var vm = new NoteItemViewModel(note, _noteService, _settingsService, _projectService);
+            vm.NoteChanged += () => RefreshNotes();
+            vm.NoteDeleted += () => RefreshNotes();
+            SplitNotes.Add(vm);
+        }
+
+        // Preserve the prior selection across the rebuild; otherwise default to the
+        // first note so the detail pane is never blank when notes exist.
+        SelectedSplitNote =
+            (previousPath != null
+                ? SplitNotes.FirstOrDefault(v => v.Note.FilePath == previousPath)
+                : null)
+            ?? SplitNotes.FirstOrDefault();
     }
 
     private void HandleReorder(NoteItemViewModel source, NoteItemViewModel target)
@@ -346,11 +411,17 @@ public partial class MainViewModel : ObservableObject
         RefreshNotes();
     }
 
-    partial void OnIsGridViewChanged(bool value)
+    partial void OnViewModeChanged(string value)
     {
         var settings = _settingsService.Load();
-        settings.GridView = value;
+        settings.ViewMode = value;
+        settings.GridView = value == "grid"; // keep legacy flag in sync
         _settingsService.Save(settings);
+        OnPropertyChanged(nameof(IsGridLayout));
+        OnPropertyChanged(nameof(IsSplitLayout));
+        OnPropertyChanged(nameof(SelectedViewMode));
+        if (value == "split" && SelectedSplitNote == null)
+            SelectedSplitNote = SplitNotes.FirstOrDefault();
     }
 
     partial void OnIsSelectModeChanged(bool value)
