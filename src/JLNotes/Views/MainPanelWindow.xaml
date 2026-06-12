@@ -53,6 +53,16 @@
                               Style="{StaticResource DarkComboBox}"
                               Width="180" HorizontalAlignment="Left" />
 
+                    <!-- App version — tracks the assembly version (csproj <Version>). -->
+                    <TextBlock Grid.Column="0"
+                               Text="{Binding AppVersion}"
+                               Foreground="{DynamicResource TextMutedBrush}"
+                               FontFamily="Segoe UI" FontSize="11"
+                               VerticalAlignment="Center"
+                               HorizontalAlignment="Right"
+                               Margin="0,0,8,0"
+                               ToolTip="JL Notes version" />
+
                     <Button Grid.Column="1" Content="+" Style="{StaticResource SubtleButton}"
                             FontSize="18" Margin="8,0"
                             Click="AddNote_Click" />

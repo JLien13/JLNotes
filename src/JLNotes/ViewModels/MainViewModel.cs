@@ -42,6 +42,13 @@ public partial class MainViewModel : ObservableObject
     public ObservableCollection<ProjectGroupViewModel> ProjectGroups { get; } = [];
     public ObservableCollection<string> Projects { get; } = ["Projects"];
 
+    /// <summary>Header version label, e.g. "v1.2.0" — read from the assembly so it
+    /// always tracks the csproj &lt;Version&gt; (single source of truth).</summary>
+    public string AppVersion { get; } =
+        System.Reflection.Assembly.GetExecutingAssembly().GetName().Version is { } v
+            ? $"v{v.Major}.{v.Minor}.{v.Build}"
+            : "";
+
     public bool ShowDateView => SortByDate;
     public bool ShowProjectView => !SortByDate && GroupByProject;
     public bool ShowPriorityView => !SortByDate && !GroupByProject;
