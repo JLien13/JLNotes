@@ -50,12 +50,14 @@ public static class RichTextBoxBehavior
             rtb.PreviewMouseLeftButtonDown -= OnPreviewMouseDown;
             rtb.MouseMove -= OnMouseMove;
             rtb.MouseLeave -= OnMouseLeave;
+            DataObject.RemovePastingHandler(rtb, OnPaste);
 
             rtb.AddHandler(UIElement.DropEvent, (DragEventHandler)OnDrop, true);
             rtb.AddHandler(UIElement.DragOverEvent, (DragEventHandler)OnDragOver, true);
             rtb.PreviewMouseLeftButtonDown += OnPreviewMouseDown;
             rtb.MouseMove += OnMouseMove;
             rtb.MouseLeave += OnMouseLeave;
+            DataObject.AddPastingHandler(rtb, OnPaste);
         }
         else
         {
@@ -95,6 +97,46 @@ public static class RichTextBoxBehavior
 
     #endregion
 
+    #region Clipboard paste
+
+    private static void OnPaste(object sender, DataObjectPastingEventArgs e)
+    {
+        try
+        {
+            if (sender is not RichTextBox rtb) return;
+            if (rtb.DataContext is not NoteItemViewModel vm) return;
+
+            // Image files copied in Explorer
+            if (e.DataObject.GetDataPresent(DataFormats.FileDrop))
+            {
+                if (e.DataObject.GetData(DataFormats.FileDrop) is string[] files)
+                {
+                    e.CancelCommand();
+                    vm.HandleImageDrop(files, rtb);
+                }
+                return;
+            }
+
+            // Raw bitmap (Win+Shift+S, PrintScreen, browser "Copy image").
+            // Pastes that also carry text (e.g. Word selections) keep the default
+            // text behavior. Without this handler WPF would render the bitmap in
+            // the editor but SerializeDocument would silently drop it on save.
+            if (e.DataObject.GetDataPresent(DataFormats.Bitmap) &&
+                !e.DataObject.GetDataPresent(DataFormats.UnicodeText))
+            {
+                var image = e.DataObject.GetData(DataFormats.Bitmap) as BitmapSource
+                            ?? (Clipboard.ContainsImage() ? Clipboard.GetImage() : null);
+                if (image == null) return;
+
+                e.CancelCommand();
+                vm.HandleImagePaste(image, rtb);
+            }
+        }
+        catch { }
+    }
+
+    #endregion
+
     #region Click to open
 
     private static void OnPreviewMouseDown(object sender, MouseButtonEventArgs e)
@@ -107,10 +149,10 @@ public static class RichTextBoxBehavior
 
             if (sender is not RichTextBox rtb) return;
 
-            var textBlock = SafeHitTest(rtb, e.GetPosition(rtb));
-            if (textBlock == null) return;
+            var element = SafeHitTest(rtb, e.GetPosition(rtb));
+            if (element == null) return;
 
-            var filePath = GetAttachmentFilePath(rtb, textBlock);
+            var filePath = GetAttachmentFilePath(rtb, element);
             if (filePath == null || !File.Exists(filePath)) return;
 
             // Debounce: same file within 2 seconds
@@ -123,16 +165,28 @@ public static class RichTextBoxBehavior
             _lastClickedFile = filePath;
             _lastClickTime = now;
 
-            // Flash: dim briefly
-            var originalBrush = textBlock.Foreground;
-            textBlock.Foreground = new SolidColorBrush(Color.FromRgb(0x88, 0x99, 0xAA));
+            // Flash: dim briefly (foreground for link text, opacity for thumbnails)
+            var linkBlock = element as TextBlock;
+            var originalBrush = linkBlock?.Foreground;
+            var originalOpacity = element.Opacity;
+            if (linkBlock != null)
+                linkBlock.Foreground = new SolidColorBrush(Color.FromRgb(0x88, 0x99, 0xAA));
+            else
+                element.Opacity = 0.5;
             var timer = new System.Windows.Threading.DispatcherTimer
             {
                 Interval = TimeSpan.FromMilliseconds(300)
             };
             timer.Tick += (_, _) =>
             {
-                try { textBlock.Foreground = originalBrush; } catch { }
+                try
+                {
+                    if (linkBlock != null && originalBrush != null)
+                        linkBlock.Foreground = originalBrush;
+                    else
+                        element.Opacity = originalOpacity;
+                }
+                catch { }
                 timer.Stop();
                 // Re-enable hover after flash completes
                 _hoverSuppressed = false;
@@ -158,16 +212,18 @@ public static class RichTextBoxBehavior
         {
             if (sender is not RichTextBox rtb) { return; }
 
-            var textBlock = SafeHitTest(rtb, e.GetPosition(rtb));
+            var element = SafeHitTest(rtb, e.GetPosition(rtb));
 
-            if (textBlock == null)
+            // Hover preview only applies to link-style attachments — inline
+            // thumbnails already show the image, so no popup for those.
+            if (element is not TextBlock textBlock)
             {
                 KillPopup();
                 return;
             }
 
             // Already showing popup for this element
-            if (_activePopup != null && _activePopup.Tag == textBlock) return;
+            if (_activePopup != null && ReferenceEquals(_activePopup.Tag, textBlock)) return;
 
             KillPopup();
 
@@ -250,18 +306,21 @@ public static class RichTextBoxBehavior
 
     #region Hit testing
 
-    private static TextBlock? SafeHitTest(RichTextBox rtb, Point position)
+    private static FrameworkElement? SafeHitTest(RichTextBox rtb, Point position)
     {
         try
         {
             var result = VisualTreeHelper.HitTest(rtb, position);
             if (result?.VisualHit == null) return null;
 
+            // Attachment inlines are a TextBlock (link style) or a Border
+            // wrapping an Image (thumbnail style), marked by a string Tag.
             DependencyObject? current = result.VisualHit;
             while (current != null && current != rtb)
             {
-                if (current is TextBlock tb && tb.Tag is string)
-                    return tb;
+                if (current is TextBlock or Border &&
+                    current is FrameworkElement fe && fe.Tag is string)
+                    return fe;
                 current = VisualTreeHelper.GetParent(current);
             }
         }
@@ -269,11 +328,11 @@ public static class RichTextBoxBehavior
         return null;
     }
 
-    private static string? GetAttachmentFilePath(RichTextBox rtb, TextBlock textBlock)
+    private static string? GetAttachmentFilePath(RichTextBox rtb, FrameworkElement element)
     {
         try
         {
-            if (textBlock.Tag is not string filename) return null;
+            if (element.Tag is not string filename) return null;
             if (rtb.DataContext is not NoteItemViewModel vm) return null;
             return Path.Combine(vm.Note.GetAttachmentsDir(), filename);
         }
