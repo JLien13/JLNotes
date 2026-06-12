@@ -4,7 +4,7 @@
         xmlns:vm="clr-namespace:JLNotes.ViewModels"
         Title="JL Notes"
         Icon="pack://application:,,,/tray.ico"
-        Width="380" Height="550"
+        Width="480" Height="550"
         WindowStyle="None"
         AllowsTransparency="True"
         Background="Transparent"
