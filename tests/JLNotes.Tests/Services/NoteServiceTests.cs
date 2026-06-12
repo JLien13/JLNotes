@@ -62,6 +62,24 @@ public class NoteServiceTests : IDisposable
     }
 
     [Fact]
+    public void FileWatcher_IgnoresOwnSaves()
+    {
+        // Create the note before watching so only the edit-save below can fire.
+        var note = new Note { Title = "Self write", Created = new DateTime(2026, 3, 11) };
+        _service.Save(note);
+
+        var raised = false;
+        _service.NotesChanged += () => raised = true;
+        _service.StartWatching();
+
+        note.Title = "Self write edited";
+        _service.Save(note); // our own write — must not trip the watcher refresh
+
+        Thread.Sleep(500);
+        Assert.False(raised);
+    }
+
+    [Fact]
     public void FileWatcher_RaisesEvent_WhenFileCreated()
     {
         var raised = false;

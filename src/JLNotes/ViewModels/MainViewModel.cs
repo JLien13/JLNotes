@@ -445,10 +445,15 @@ public partial class MainViewModel : ObservableObject
 
     partial void OnViewModeChanged(string? oldValue, string newValue)
     {
-        // Leaving split: flush the in-place detail editor so the other views
-        // (and disk) pick up the edit.
+        // Leaving split: flush the in-place detail editor, then rebuild the other
+        // views from the (now-current) in-memory cache so they reflect the edit.
+        // This is off the hot path — a deliberate layout switch, not note clicks —
+        // and avoids a disk reload since the save no longer trips the watcher.
         if (oldValue == "split")
+        {
             SelectedSplitNote?.CommitSplitEdit();
+            RefreshFromCache();
+        }
 
         var settings = _settingsService.Load();
         settings.ViewMode = newValue;
