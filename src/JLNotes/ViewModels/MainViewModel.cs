@@ -33,6 +33,9 @@ public partial class MainViewModel : ObservableObject
     private bool _sortByDate;
 
     [ObservableProperty]
+    private bool _isGridView;
+
+    [ObservableProperty]
     private bool _isSelectMode;
 
     public ObservableCollection<NoteItemViewModel> HighPriority { get; } = [];
@@ -99,6 +102,7 @@ public partial class MainViewModel : ObservableObject
         _statusFilter = NormalizeStatusFilter(settings.StatusFilter);
         _groupByProject = settings.GroupByProject;
         _sortByDate = settings.SortByDate;
+        _isGridView = settings.GridView;
         RefreshNotes();
 
         _noteService.NotesChanged += () =>
@@ -340,6 +344,13 @@ public partial class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(ShowProjectView));
         OnPropertyChanged(nameof(ShowPriorityView));
         RefreshNotes();
+    }
+
+    partial void OnIsGridViewChanged(bool value)
+    {
+        var settings = _settingsService.Load();
+        settings.GridView = value;
+        _settingsService.Save(settings);
     }
 
     partial void OnIsSelectModeChanged(bool value)

@@ -306,6 +306,13 @@ public partial class NoteItemViewModel : ObservableObject
         }
     }
 
+    public void HandleImagePaste(System.Windows.Media.Imaging.BitmapSource image, System.Windows.Controls.RichTextBox richTextBox)
+    {
+        var fileName = _noteService.AddAttachmentFromImage(_note, image);
+        var attachDir = _noteService.GetAttachmentsDir(_note);
+        FlowDocumentHelper.InsertAttachment(richTextBox, fileName, attachDir);
+    }
+
     public void HandleImageUpload(System.Windows.Controls.RichTextBox richTextBox)
     {
         var dialog = new Microsoft.Win32.OpenFileDialog
