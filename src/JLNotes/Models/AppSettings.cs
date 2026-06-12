@@ -39,6 +39,11 @@ public class AppSettings
 
     [JsonPropertyName("gridView")]
     public bool GridView { get; set; } = false;
+
+    // Layout mode for the note area: "list" | "grid" | "split".
+    // Empty = not yet set; MainViewModel migrates from the legacy gridView flag.
+    [JsonPropertyName("viewMode")]
+    public string ViewMode { get; set; } = "";
 }
 
 public class WindowPosition
