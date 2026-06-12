@@ -117,12 +117,7 @@ public class Note
     }
 
     public string GetAttachmentsDir()
-    {
-        var baseDir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            ".jlnotes", "attachments", GetSlug());
-        return baseDir;
-    }
+        => Path.Combine(AppPaths.AttachmentsDir, GetSlug());
 
     public string GenerateFileName()
     {
