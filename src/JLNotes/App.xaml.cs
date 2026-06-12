@@ -141,6 +141,8 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        // Final safety net: flush any in-place split-detail edit before teardown.
+        (_mainPanel?.DataContext as MainViewModel)?.CommitSplitEdit();
         _trayIcon?.Dispose();
         _noteService?.Dispose();
         _singleInstanceMutex?.ReleaseMutex();
