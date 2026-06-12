@@ -17,13 +17,8 @@ public partial class App : Application
     private SettingsService? _settingsService;
     private ProjectService? _projectService;
 
-    private static readonly string BaseDir = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-        ".jlnotes");
-
-    private static readonly string LegacyDir = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-        ".claude-notes");
+    private static readonly string BaseDir = AppPaths.BaseDir;
+    private static readonly string LegacyDir = AppPaths.LegacyDir;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -50,7 +45,7 @@ public partial class App : Application
 
         // Ensure data directory exists
         Directory.CreateDirectory(BaseDir);
-        Directory.CreateDirectory(Path.Combine(BaseDir, "notes"));
+        Directory.CreateDirectory(AppPaths.NotesDir);
 
         // First-run: create empty projects.json if it doesn't exist
         var projectsPath = Path.Combine(BaseDir, "projects.json");
@@ -59,7 +54,7 @@ public partial class App : Application
             File.WriteAllText(projectsPath, "[]");
 
         // Create services
-        _noteService = new NoteService(Path.Combine(BaseDir, "notes"));
+        _noteService = new NoteService(AppPaths.NotesDir);
         _settingsService = new SettingsService(BaseDir);
         _projectService = new ProjectService(BaseDir);
 
