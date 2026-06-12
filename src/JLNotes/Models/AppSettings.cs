@@ -36,6 +36,9 @@ public class AppSettings
 
     [JsonPropertyName("sortByDate")]
     public bool SortByDate { get; set; } = false;
+
+    [JsonPropertyName("gridView")]
+    public bool GridView { get; set; } = false;
 }
 
 public class WindowPosition

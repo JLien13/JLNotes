@@ -109,6 +109,30 @@ public class NoteService : IDisposable
         return fileName;
     }
 
+    public string AddAttachmentFromImage(Note note, System.Windows.Media.Imaging.BitmapSource image)
+    {
+        var dir = GetAttachmentsDir(note);
+        Directory.CreateDirectory(dir);
+
+        var baseName = $"pasted-{DateTime.Now:yyyyMMdd-HHmmss}";
+        var fileName = $"{baseName}.png";
+        var destPath = Path.Combine(dir, fileName);
+
+        var counter = 2;
+        while (File.Exists(destPath))
+        {
+            fileName = $"{baseName}-{counter}.png";
+            destPath = Path.Combine(dir, fileName);
+            counter++;
+        }
+
+        var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
+        encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(image));
+        using var stream = File.Create(destPath);
+        encoder.Save(stream);
+        return fileName;
+    }
+
     public void CleanupOrphanedAttachments(Note note)
     {
         var dir = GetAttachmentsDir(note);
