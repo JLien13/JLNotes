@@ -15,6 +15,10 @@ public class SettingsService
         _settingsPath = Path.Combine(baseDir, "settings.json");
     }
 
+    /// <summary>True once settings.json exists on disk — i.e. this is NOT a
+    /// first run. Lets callers apply first-install defaults exactly once.</summary>
+    public bool Exists => File.Exists(_settingsPath);
+
     public AppSettings Load()
     {
         if (!File.Exists(_settingsPath))

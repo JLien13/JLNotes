@@ -35,7 +35,25 @@ public partial class MainViewModel : ObservableObject
     // Layout mode for the note area: "list" | "grid" | "split". Chosen from the
     // header View dropdown.
     [ObservableProperty]
-    private string _viewMode = "list";
+    private string _viewMode = DefaultViewMode;
+
+    /// <summary>The view a brand-new install opens in — single source of truth
+    /// for the first-run default (see <see cref="ResolveInitialViewMode"/>).</summary>
+    public const string DefaultViewMode = "split";
+
+    /// <summary>Resolve which view mode to start in, in priority order:
+    /// (1) an explicit prior choice — "remember the last selected view, always";
+    /// (2) the legacy <c>gridView</c> flag — migrate pre-viewMode users;
+    /// (3) a brand-new install (no settings file yet) — the split default;
+    /// (4) otherwise an existing pre-viewMode user — keep the historical list.</summary>
+    public static string ResolveInitialViewMode(AppSettings settings, bool settingsFileExisted)
+    {
+        if (!string.IsNullOrEmpty(settings.ViewMode))
+            return settings.ViewMode;
+        if (settings.GridView)
+            return "grid";
+        return settingsFileExisted ? "list" : DefaultViewMode;
+    }
 
     [ObservableProperty]
     private bool _isSelectMode;
@@ -124,14 +142,23 @@ public partial class MainViewModel : ObservableObject
         _projectService = projectService;
         _settingsService = settingsService;
 
+        var settingsExisted = settingsService.Exists;
         var settings = settingsService.Load();
         _statusFilter = NormalizeStatusFilter(settings.StatusFilter);
         _groupByProject = settings.GroupByProject;
         _sortByDate = settings.SortByDate;
-        // Prefer the new viewMode; fall back to the legacy gridView flag.
-        _viewMode = !string.IsNullOrEmpty(settings.ViewMode)
-            ? settings.ViewMode
-            : settings.GridView ? "grid" : "list";
+        _viewMode = ResolveInitialViewMode(settings, settingsExisted);
+
+        // First run: persist the resolved default so the chosen view is
+        // remembered like any later selection — otherwise an unrelated
+        // load-modify-save (e.g. toggling a filter) would clobber it back.
+        if (!settingsExisted)
+        {
+            settings.ViewMode = _viewMode;
+            settings.GridView = _viewMode == "grid";
+            settingsService.Save(settings);
+        }
+
         RefreshNotes();
 
         _noteService.NotesChanged += () =>
@@ -285,6 +312,11 @@ public partial class MainViewModel : ObservableObject
 
     private void RebuildSplit(List<Note> filtered)
     {
+        // Flush any in-place detail edits before we swap out the VM instances,
+        // so a background refresh (file watcher, filter/search change) never
+        // drops unsaved work. No-ops when nothing changed.
+        SelectedSplitNote?.CommitSplitEdit();
+
         var ordered = SortByDate
             ? filtered.OrderByDescending(n => n.Created)
             : filtered
@@ -411,18 +443,42 @@ public partial class MainViewModel : ObservableObject
         RefreshNotes();
     }
 
-    partial void OnViewModeChanged(string value)
+    partial void OnViewModeChanged(string? oldValue, string newValue)
     {
+        // Leaving split: flush the in-place detail editor so the other views
+        // (and disk) pick up the edit.
+        if (oldValue == "split")
+            SelectedSplitNote?.CommitSplitEdit();
+
         var settings = _settingsService.Load();
-        settings.ViewMode = value;
-        settings.GridView = value == "grid"; // keep legacy flag in sync
+        settings.ViewMode = newValue;
+        settings.GridView = newValue == "grid"; // keep legacy flag in sync
         _settingsService.Save(settings);
         OnPropertyChanged(nameof(IsGridLayout));
         OnPropertyChanged(nameof(IsSplitLayout));
         OnPropertyChanged(nameof(SelectedViewMode));
-        if (value == "split" && SelectedSplitNote == null)
-            SelectedSplitNote = SplitNotes.FirstOrDefault();
+
+        // Entering split: ensure a note is selected and primed for editing.
+        if (newValue == "split")
+        {
+            if (SelectedSplitNote == null)
+                SelectedSplitNote = SplitNotes.FirstOrDefault(); // OnSelectedSplitNoteChanged primes it
+            else
+                SelectedSplitNote.BeginSplitEdit();
+        }
     }
+
+    // Split detail pane is always editable: commit the note we're leaving and
+    // prime the one we're entering so its title/body load into the editor.
+    partial void OnSelectedSplitNoteChanged(NoteItemViewModel? oldValue, NoteItemViewModel? newValue)
+    {
+        oldValue?.CommitSplitEdit();
+        newValue?.BeginSplitEdit();
+    }
+
+    /// <summary>Flush the split detail pane's in-place edits to disk. Safe to
+    /// call anytime — no-ops when nothing changed. Used by window blur/close.</summary>
+    public void CommitSplitEdit() => SelectedSplitNote?.CommitSplitEdit();
 
     partial void OnIsSelectModeChanged(bool value)
     {
