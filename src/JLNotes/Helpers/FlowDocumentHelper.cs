@@ -17,6 +17,15 @@ public static class FlowDocumentHelper
     private static readonly BrushConverter BrushConverter = new();
     private static readonly Brush AccentBlueBrush = (Brush)BrushConverter.ConvertFromString("#4a9eff")!;
     private static readonly Brush ForegroundBrush = (Brush)BrushConverter.ConvertFromString("#e0e0e0")!;
+    private static readonly Brush ThumbnailBorderBrush = (Brush)BrushConverter.ConvertFromString("#2a2a4a")!;
+
+    private static readonly HashSet<string> ImageExtensions = new(StringComparer.OrdinalIgnoreCase)
+        { ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp" };
+
+    // Display cap for inline thumbnails (DIP); decode at up to 3x for hi-DPI crispness.
+    private const double ThumbMaxWidth = 300;
+    private const double ThumbMaxHeight = 220;
+    private const int ThumbDecodeWidth = 900;
 
     public static FlowDocument BuildDocument(string bodyText, string attachmentsDir)
     {
@@ -102,8 +111,8 @@ public static class FlowDocumentHelper
                         sb.Append(run.Text);
                     }
                     else if (inline is InlineUIContainer container &&
-                             container.Child is TextBlock textBlock &&
-                             textBlock.Tag is string tagValue)
+                             container.Child is FrameworkElement element &&
+                             element.Tag is string tagValue)
                     {
                         sb.Append("{{");
                         sb.Append(tagValue);
@@ -127,8 +136,8 @@ public static class FlowDocumentHelper
                 foreach (var inline in paragraph.Inlines)
                 {
                     if (inline is InlineUIContainer container &&
-                        container.Child is TextBlock textBlock &&
-                        textBlock.Tag is string tagValue)
+                        container.Child is FrameworkElement element &&
+                        element.Tag is string tagValue)
                     {
                         filenames.Add(tagValue);
                     }
@@ -185,7 +194,69 @@ public static class FlowDocumentHelper
     {
         var filePath = Path.Combine(attachmentsDir, filename);
 
-        var textBlock = new TextBlock
+        if (File.Exists(filePath) && ImageExtensions.Contains(Path.GetExtension(filename)))
+        {
+            try
+            {
+                return new InlineUIContainer(CreateThumbnail(filename, filePath));
+            }
+            catch
+            {
+                // Unreadable/corrupt image — fall through to the link style
+            }
+        }
+
+        return new InlineUIContainer(CreateLink(filename));
+    }
+
+    private static Border CreateThumbnail(string filename, string filePath)
+    {
+        // Header-only read of the natural width so small images aren't upscaled by DecodePixelWidth.
+        int decodeWidth;
+        using (var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+        {
+            var frame = BitmapFrame.Create(fs, BitmapCreateOptions.DelayCreation, BitmapCacheOption.None);
+            decodeWidth = Math.Min(frame.PixelWidth, ThumbDecodeWidth);
+        }
+
+        var bitmap = new BitmapImage();
+        bitmap.BeginInit();
+        bitmap.CacheOption = BitmapCacheOption.OnLoad; // release the file handle so save/cleanup can delete it
+        bitmap.UriSource = new Uri(filePath, UriKind.Absolute);
+        bitmap.DecodePixelWidth = decodeWidth;
+        bitmap.EndInit();
+        bitmap.Freeze();
+
+        var image = new Image
+        {
+            Source = bitmap,
+            MaxWidth = ThumbMaxWidth,
+            MaxHeight = ThumbMaxHeight,
+            Stretch = Stretch.Uniform,
+            StretchDirection = StretchDirection.DownOnly
+        };
+        RenderOptions.SetBitmapScalingMode(image, BitmapScalingMode.HighQuality);
+
+        // Tooltip and click are handled at the RichTextBox level (RichTextBoxBehavior)
+        // because RichTextBox in edit mode intercepts mouse events before they reach inline UIElements.
+        // The Tag property is what marks this as an attachment element.
+        return new Border
+        {
+            Child = image,
+            Tag = filename,
+            ToolTip = filename,
+            Cursor = Cursors.Hand,
+            Margin = new Thickness(0, 4, 0, 2),
+            CornerRadius = new CornerRadius(4),
+            BorderThickness = new Thickness(1),
+            BorderBrush = ThumbnailBorderBrush,
+            Background = Brushes.Transparent
+        };
+    }
+
+    private static TextBlock CreateLink(string filename)
+    {
+        return new TextBlock
         {
             Text = filename,
             Foreground = AccentBlueBrush,
@@ -195,11 +266,5 @@ public static class FlowDocumentHelper
             FontFamily = new FontFamily("Segoe UI"),
             Tag = filename
         };
-
-        // Tooltip and click are handled at the RichTextBox level (RichTextBoxBehavior)
-        // because RichTextBox in edit mode intercepts mouse events before they reach inline UIElements.
-        // The Tag property is used to identify this as an attachment element.
-
-        return new InlineUIContainer(textBlock);
     }
 }
