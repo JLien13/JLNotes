@@ -14,6 +14,10 @@ namespace JLNotes.Helpers;
 public static class FlowDocumentHelper
 {
     private static readonly Regex AttachmentTokenRegex = new(@"\{\{(.+?)\}\}", RegexOptions.Compiled);
+    // Scheme'd URLs plus bare www. domains ("www.corvascular.com").
+    private static readonly Regex UrlRegex = new(@"(?:https?://|www\.)\S+", RegexOptions.Compiled);
+    // Task-list line: optional indent, "- [ ]" / "- [x]", optional trailing space.
+    private static readonly Regex CheckboxLineRegex = new(@"^(\s*)- \[( |x|X)\] ?", RegexOptions.Compiled);
     private static readonly BrushConverter BrushConverter = new();
     private static readonly Brush AccentBlueBrush = (Brush)BrushConverter.ConvertFromString("#4a9eff")!;
     private static readonly Brush ForegroundBrush = (Brush)BrushConverter.ConvertFromString("#e0e0e0")!;
@@ -75,7 +79,7 @@ public static class FlowDocumentHelper
 
                     if (textLines[j].Length > 0)
                     {
-                        currentParagraph.Inlines.Add(new Run(textLines[j]));
+                        AddTextLine(currentParagraph, textLines[j]);
                     }
                 }
             }
@@ -105,24 +109,40 @@ public static class FlowDocumentHelper
                 isFirstParagraph = false;
 
                 foreach (var inline in paragraph.Inlines)
-                {
-                    if (inline is Run run)
-                    {
-                        sb.Append(run.Text);
-                    }
-                    else if (inline is InlineUIContainer container &&
-                             container.Child is FrameworkElement element &&
-                             element.Tag is string tagValue)
-                    {
-                        sb.Append("{{");
-                        sb.Append(tagValue);
-                        sb.Append("}}");
-                    }
-                }
+                    AppendInlineText(sb, inline);
             }
         }
 
         return sb.ToString();
+    }
+
+    private static void AppendInlineText(StringBuilder sb, Inline inline)
+    {
+        if (inline is Run run)
+        {
+            sb.Append(run.Text);
+        }
+        else if (inline is InlineUIContainer container)
+        {
+            if (container.Child is CheckBox checkBox)
+            {
+                // Task checkbox: live IsChecked state writes back as markdown.
+                sb.Append(checkBox.Tag as string ?? "");
+                sb.Append(checkBox.IsChecked == true ? "- [x] " : "- [ ] ");
+            }
+            else if (container.Child is FrameworkElement element && element.Tag is string tagValue)
+            {
+                sb.Append("{{");
+                sb.Append(tagValue);
+                sb.Append("}}");
+            }
+        }
+        else if (inline is Span span)
+        {
+            // Hyperlinks (and any other Span) serialize as their plain text.
+            foreach (var child in span.Inlines)
+                AppendInlineText(sb, child);
+        }
     }
 
     public static List<string> GetAttachmentFilenames(FlowDocument doc)
@@ -135,8 +155,11 @@ public static class FlowDocumentHelper
             {
                 foreach (var inline in paragraph.Inlines)
                 {
+                    // CheckBox containers carry a string Tag too (their indent) --
+                    // they are task checkboxes, not attachments.
                     if (inline is InlineUIContainer container &&
                         container.Child is FrameworkElement element &&
+                        element is not CheckBox &&
                         element.Tag is string tagValue)
                     {
                         filenames.Add(tagValue);
@@ -188,6 +211,101 @@ public static class FlowDocumentHelper
 
         // Move caret after the inserted element
         richTextBox.CaretPosition = container.ElementEnd;
+    }
+
+    /// <summary>One text line into a paragraph: a leading "- [ ]"/"- [x]" becomes a
+    /// live checkbox (only at true line start), and URLs become Ctrl+Click hyperlinks.</summary>
+    private static void AddTextLine(Paragraph paragraph, string text)
+    {
+        if (paragraph.Inlines.Count == 0)
+        {
+            var m = CheckboxLineRegex.Match(text);
+            if (m.Success)
+            {
+                var isChecked = m.Groups[2].Value is "x" or "X";
+                paragraph.Inlines.Add(CreateCheckboxInline(m.Groups[1].Value, isChecked));
+                text = text[m.Length..];
+            }
+        }
+        AddTextWithLinks(paragraph, text);
+    }
+
+    private static InlineUIContainer CreateCheckboxInline(string indent, bool isChecked)
+    {
+        var checkBox = new CheckBox
+        {
+            IsChecked = isChecked,
+            Tag = indent, // original leading whitespace, restored on serialize
+            Margin = new Thickness(indent.Length * 7, 0, 5, 0),
+            Cursor = Cursors.Hand
+        };
+        return new InlineUIContainer(checkBox) { BaselineAlignment = BaselineAlignment.Center };
+    }
+
+    private static void AddTextWithLinks(Paragraph paragraph, string text)
+    {
+        if (text.Length == 0) return;
+
+        var pos = 0;
+        foreach (Match m in UrlRegex.Matches(text))
+        {
+            var url = TrimUrlEnd(m.Value);
+            if (url.Length == 0) continue;
+            if (m.Index > pos)
+                paragraph.Inlines.Add(new Run(text[pos..m.Index]));
+            paragraph.Inlines.Add(CreateHyperlink(url));
+            pos = m.Index + url.Length;
+        }
+        if (pos < text.Length)
+            paragraph.Inlines.Add(new Run(text[pos..]));
+    }
+
+    // \S+ grabs trailing punctuation ("see https://x.com." / "(https://x.com)") --
+    // peel it off so the link target is the bare URL. A ')' stays only while it
+    // balances a '(' inside the URL (e.g. wikipedia's "Foo_(bar)").
+    private static string TrimUrlEnd(string url)
+    {
+        while (url.Length > 0)
+        {
+            var last = url[^1];
+            if (last is '.' or ',' or ';' or ':' or '!' or '?' or '\'' or '"' or '>' ||
+                (last == ')' && url.Count(c => c == ')') > url.Count(c => c == '(')))
+                url = url[..^1];
+            else
+                break;
+        }
+        return url;
+    }
+
+    private static Hyperlink CreateHyperlink(string url)
+    {
+        var link = new Hyperlink(new Run(url))
+        {
+            Foreground = AccentBlueBrush,
+            ToolTip = url + Environment.NewLine + "Ctrl+Click to open",
+            Cursor = Cursors.Hand
+        };
+        // Fires on Ctrl+Click inside an editable RichTextBox (IsDocumentEnabled);
+        // a plain click keeps placing the caret for editing.
+        link.Click += (_, _) => OpenUrl(url);
+
+        var menu = new ContextMenu();
+        var open = new MenuItem { Header = "Open link" };
+        open.Click += (_, _) => OpenUrl(url);
+        var copy = new MenuItem { Header = "Copy link" };
+        copy.Click += (_, _) => { try { Clipboard.SetText(url); } catch { } };
+        menu.Items.Add(open);
+        menu.Items.Add(copy);
+        link.ContextMenu = menu;
+        return link;
+    }
+
+    private static void OpenUrl(string url)
+    {
+        if (url.StartsWith("www.", StringComparison.OrdinalIgnoreCase))
+            url = "https://" + url;
+        try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); }
+        catch { }
     }
 
     private static InlineUIContainer CreateAttachmentInline(string filename, string attachmentsDir)
