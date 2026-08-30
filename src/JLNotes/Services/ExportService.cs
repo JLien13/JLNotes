@@ -1,7 +1,13 @@
+using System.IO;
+using System.Windows.Media.Imaging;
 using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Wordprocessing;
+using JLNotes.Helpers;
 using JLNotes.Models;
+using A = DocumentFormat.OpenXml.Drawing;
+using DW = DocumentFormat.OpenXml.Drawing.Wordprocessing;
+using PIC = DocumentFormat.OpenXml.Drawing.Pictures;
 
 namespace JLNotes.Services;
 
@@ -13,7 +19,10 @@ public static class ExportService
     private const string AccentBlueHex = "4A9EFF";
     private const string DarkHex = "1F2937";
 
-    public static void ExportToWord(IReadOnlyList<Note> notes, string outputPath)
+    // getAttachmentsDir: NoteService.GetAttachmentsDir -- the app's single
+    // authority for where a note's attachments live.
+    public static void ExportToWord(IReadOnlyList<Note> notes, string outputPath,
+        Func<Note, string> getAttachmentsDir)
     {
         using var doc = WordprocessingDocument.Create(outputPath, WordprocessingDocumentType.Document);
         var mainPart = doc.AddMainDocumentPart();
@@ -38,11 +47,12 @@ public static class ExportService
             if (i > 0)
                 AppendPageBreak(body);
 
-            RenderNote(body, notes[i]);
+            RenderNote(body, mainPart, notes[i], getAttachmentsDir);
         }
     }
 
-    private static void RenderNote(Body body, Note note)
+    private static void RenderNote(Body body, MainDocumentPart mainPart, Note note,
+        Func<Note, string> getAttachmentsDir)
     {
         // Title — large, bold, accent color, with bottom border
         var titlePara = CreateStyledParagraph(note.Title, 32, bold: true, color: DarkHex);
@@ -92,6 +102,26 @@ public static class ExportService
             {
                 var line = rawLine.TrimEnd('\r');
 
+                // {{attachment}} tokens (same grammar as the in-app renderer):
+                // image files embed as pictures, anything else as its filename.
+                var tokens = FlowDocumentHelper.AttachmentTokenRegex.Matches(line);
+                if (tokens.Count > 0)
+                {
+                    var pos = 0;
+                    foreach (System.Text.RegularExpressions.Match token in tokens)
+                    {
+                        var before = line[pos..token.Index].Trim();
+                        if (before.Length > 0)
+                            body.AppendChild(CreateStyledParagraph(before, 22));
+                        AppendAttachment(body, mainPart, getAttachmentsDir(note), token.Groups[1].Value);
+                        pos = token.Index + token.Length;
+                    }
+                    var after = line[pos..].Trim();
+                    if (after.Length > 0)
+                        body.AppendChild(CreateStyledParagraph(after, 22));
+                    continue;
+                }
+
                 if (line.StartsWith("### "))
                     body.AppendChild(CreateHeading(line[4..], 24));
                 else if (line.StartsWith("## "))
@@ -104,6 +134,103 @@ public static class ExportService
                     body.AppendChild(CreateStyledParagraph(line, 22));
             }
         }
+    }
+
+    private static void AppendAttachment(Body body, MainDocumentPart mainPart, string attachmentsDir, string filename)
+    {
+        var path = Path.Combine(attachmentsDir, filename);
+
+        if (File.Exists(path) && FlowDocumentHelper.IsImageFile(filename) &&
+            TryGetImagePartType(filename, out var partType))
+        {
+            try
+            {
+                body.AppendChild(CreateImageParagraph(mainPart, path, partType));
+                return;
+            }
+            catch
+            {
+                // Unreadable/corrupt image -- fall through to the filename style,
+                // mirroring the in-app renderer's fallback.
+            }
+        }
+
+        body.AppendChild(CreateStyledParagraph(filename, 18, color: AccentBlueHex));
+    }
+
+    private static bool TryGetImagePartType(string filename, out PartTypeInfo partType)
+    {
+        switch (Path.GetExtension(filename).ToLowerInvariant())
+        {
+            case ".png": partType = ImagePartType.Png; return true;
+            case ".jpg" or ".jpeg": partType = ImagePartType.Jpeg; return true;
+            case ".gif": partType = ImagePartType.Gif; return true;
+            case ".bmp": partType = ImagePartType.Bmp; return true;
+            default: partType = ImagePartType.Png; return false; // e.g. .webp -- Word can't host it
+        }
+    }
+
+    // Page width inside the default margins is ~6.5"; cap images a bit under it.
+    private const double MaxImageInches = 6.0;
+    private const int EmusPerInch = 914400;
+
+    private static Paragraph CreateImageParagraph(MainDocumentPart mainPart, string path, PartTypeInfo partType)
+    {
+        // Header-only decode for natural size in inches (same pattern as the
+        // in-app thumbnail renderer).
+        double widthIn, heightIn;
+        using (var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+        {
+            var frame = BitmapFrame.Create(fs, BitmapCreateOptions.DelayCreation, BitmapCacheOption.None);
+            var dpiX = frame.DpiX > 1 ? frame.DpiX : 96.0;
+            var dpiY = frame.DpiY > 1 ? frame.DpiY : 96.0;
+            widthIn = frame.PixelWidth / dpiX;
+            heightIn = frame.PixelHeight / dpiY;
+        }
+
+        // Shrink-to-fit only, never upscale.
+        if (widthIn > MaxImageInches)
+        {
+            heightIn *= MaxImageInches / widthIn;
+            widthIn = MaxImageInches;
+        }
+        var widthEmu = (long)(widthIn * EmusPerInch);
+        var heightEmu = (long)(heightIn * EmusPerInch);
+
+        var imagePart = mainPart.AddImagePart(partType);
+        using (var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+            imagePart.FeedData(fs);
+        var relId = mainPart.GetIdOfPart(imagePart);
+
+        var name = Path.GetFileName(path);
+        var drawing = new Drawing(
+            new DW.Inline(
+                new DW.Extent { Cx = widthEmu, Cy = heightEmu },
+                new DW.DocProperties { Id = 1U, Name = name },
+                new A.Graphic(
+                    new A.GraphicData(
+                        new PIC.Picture(
+                            new PIC.NonVisualPictureProperties(
+                                new PIC.NonVisualDrawingProperties { Id = 0U, Name = name },
+                                new PIC.NonVisualPictureDrawingProperties()),
+                            new PIC.BlipFill(
+                                new A.Blip { Embed = relId },
+                                new A.Stretch(new A.FillRectangle())),
+                            new PIC.ShapeProperties(
+                                new A.Transform2D(
+                                    new A.Offset { X = 0L, Y = 0L },
+                                    new A.Extents { Cx = widthEmu, Cy = heightEmu }),
+                                new A.PresetGeometry(new A.AdjustValueList()) { Preset = A.ShapeTypeValues.Rectangle })))
+                    { Uri = "http://schemas.openxmlformats.org/drawingml/2006/picture" }))
+            {
+                DistanceFromTop = 0U, DistanceFromBottom = 0U,
+                DistanceFromLeft = 0U, DistanceFromRight = 0U
+            });
+
+        var para = new Paragraph(new Run(drawing));
+        para.ParagraphProperties = new ParagraphProperties(
+            new SpacingBetweenLines { Before = "80", After = "80" });
+        return para;
     }
 
     private static void AppendMetadataTable(Body body, Note note)
