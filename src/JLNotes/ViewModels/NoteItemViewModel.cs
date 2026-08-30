@@ -333,7 +333,7 @@ public partial class NoteItemViewModel : ObservableObject
         };
         if (dialog.ShowDialog() == true)
         {
-            ExportService.ExportToWord([_note], dialog.FileName);
+            ExportService.ExportToWord([_note], dialog.FileName, _noteService.GetAttachmentsDir);
         }
     }
 
