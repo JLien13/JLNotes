@@ -44,6 +44,9 @@ public static class RichTextBoxBehavior
         if (e.NewValue is FlowDocument doc)
         {
             rtb.Document = doc;
+            // Lets embedded controls work while editable: task checkboxes toggle
+            // on click, hyperlinks open on Ctrl+Click.
+            rtb.IsDocumentEnabled = true;
 
             rtb.RemoveHandler(UIElement.DropEvent, (DragEventHandler)OnDrop);
             rtb.RemoveHandler(UIElement.DragOverEvent, (DragEventHandler)OnDragOver);
