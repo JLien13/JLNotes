@@ -34,21 +34,31 @@ public class SettingsService
         File.WriteAllText(_settingsPath, json);
     }
 
+    // The HKCU Run value is the single source of truth for auto-start; the
+    // installer's optional "startupicon" task writes the same value name.
+    private const string RunKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
+    private const string RunValueName = "JLNotes";
+
+    public bool GetAutoStart()
+    {
+        using var key = Registry.CurrentUser.OpenSubKey(RunKeyPath, false);
+        return key?.GetValue(RunValueName) != null;
+    }
+
     public void SetAutoStart(bool enabled)
     {
-        using var key = Registry.CurrentUser.OpenSubKey(
-            @"Software\Microsoft\Windows\CurrentVersion\Run", true);
+        using var key = Registry.CurrentUser.OpenSubKey(RunKeyPath, true);
 
         if (key == null) return;
 
         if (enabled)
         {
             var exePath = Environment.ProcessPath ?? "";
-            key.SetValue("JLNotes", $"\"{exePath}\" --minimized");
+            key.SetValue(RunValueName, $"\"{exePath}\" --minimized");
         }
         else
         {
-            key.DeleteValue("JLNotes", false);
+            key.DeleteValue(RunValueName, false);
         }
     }
 }
