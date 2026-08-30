@@ -10,7 +10,10 @@ namespace JLNotes;
 
 public partial class App : Application
 {
+    private const string ActivationEventName = "JLNotes_Activate";
+
     private static Mutex? _singleInstanceMutex;
+    private EventWaitHandle? _activationSignal;
     private TaskbarIcon? _trayIcon;
     private MainPanelWindow? _mainPanel;
     private NoteService? _noteService;
@@ -27,11 +30,16 @@ public partial class App : Application
         _singleInstanceMutex = new Mutex(true, "JLNotes_SingleInstance", out bool isNewInstance);
         if (!isNewInstance)
         {
-            MessageBox.Show(
-                "JL Notes is already running.\n\nCheck your system tray for the existing instance.",
-                "JL Notes",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
+            // Hand off to the running instance: ask it to show its panel, then
+            // leave quietly. (--minimized relaunches stay silent.)
+            if (!e.Args.Contains("--minimized"))
+            {
+                try { EventWaitHandle.OpenExisting(ActivationEventName).Set(); }
+                catch (WaitHandleCannotBeOpenedException) { /* first instance still starting */ }
+            }
+            // We never acquired ownership, so OnExit must not ReleaseMutex.
+            _singleInstanceMutex.Dispose();
+            _singleInstanceMutex = null;
             Shutdown();
             return;
         }
@@ -65,8 +73,14 @@ public partial class App : Application
         // Create main VM
         var mainVm = new MainViewModel(_noteService, _projectService, _settingsService);
 
-        // Create main panel (hidden initially)
+        // Create main panel (hidden initially) where the last session left it
         _mainPanel = new MainPanelWindow { DataContext = mainVm };
+        _mainPanel.ApplyPersistedGeometry(settings.PanelPosition);
+        _mainPanel.ApplySplitListWidth(settings.SplitListWidth);
+
+        // A second launch of the exe signals this event instead of starting up.
+        _activationSignal = new EventWaitHandle(false, EventResetMode.AutoReset, ActivationEventName);
+        new Thread(ActivationListenerLoop) { IsBackground = true }.Start();
 
         // Set up tray icon
         _trayIcon = new TaskbarIcon
@@ -78,9 +92,31 @@ public partial class App : Application
         };
         _trayIcon.TrayLeftMouseUp += (_, _) => TogglePanel();
 
-        // Show the panel on startup
-        _mainPanel.Show();
-        _mainPanel.Activate();
+        // Show the panel on startup -- unless launched by the Windows Run key
+        // (--minimized), where the expected behavior is to sit quietly in the tray.
+        if (!e.Args.Contains("--minimized"))
+        {
+            _mainPanel.Show();
+            _mainPanel.Activate();
+        }
+    }
+
+    private void ActivationListenerLoop()
+    {
+        while (_activationSignal is { } signal)
+        {
+            try { signal.WaitOne(); }
+            catch (ObjectDisposedException) { return; }
+
+            Dispatcher.BeginInvoke(() =>
+            {
+                if (_mainPanel == null) return;
+                _mainPanel.Show();
+                if (_mainPanel.WindowState == WindowState.Minimized)
+                    _mainPanel.WindowState = WindowState.Normal;
+                _mainPanel.Activate();
+            });
+        }
     }
 
     private void TogglePanel()
@@ -143,6 +179,19 @@ public partial class App : Application
     {
         // Final safety net: flush any in-place split-detail edit before teardown.
         (_mainPanel?.DataContext as MainViewModel)?.CommitSplitEdit();
+
+        // Remember where the panel and split divider live for next launch.
+        if (_mainPanel != null && _settingsService != null)
+        {
+            var settings = _settingsService.Load();
+            settings.PanelPosition = _mainPanel.GetPersistedGeometry();
+            var splitWidth = _mainPanel.GetSplitListWidth();
+            if (splitWidth > 0)
+                settings.SplitListWidth = splitWidth;
+            _settingsService.Save(settings);
+        }
+
+        _activationSignal?.Dispose();
         _trayIcon?.Dispose();
         _noteService?.Dispose();
         _singleInstanceMutex?.ReleaseMutex();
