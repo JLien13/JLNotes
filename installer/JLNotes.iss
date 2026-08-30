@@ -87,9 +87,10 @@ ReadyLabel2a=Click Install to continue. Your existing notes in your user folder 
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription: "Additional shortcuts:"
-; JL Notes is a passive tray app meant to be available whenever you sign in --
-; start-at-login is the expected default for a sticky-notes tool. Easy to untick.
-Name: "startupicon"; Description: "&Launch JL Notes when Windows starts"; GroupDescription: "Startup:"
+; Auto-start is opt-in: unchecked by default on install. After install the
+; in-app Settings window ("Launch JL Notes when Windows starts") owns the same
+; HKCU Run value, so users can flip it either way without reinstalling.
+Name: "startupicon"; Description: "&Launch JL Notes when Windows starts"; GroupDescription: "Startup:"; Flags: unchecked
 
 [Files]
 Source: "..\publish\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -102,9 +103,11 @@ Name: "{group}\Uninstall {#MyAppName}";             Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}";                 Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\tray.ico"; Tasks: desktopicon
 
 [Registry]
-; Per-user auto-start. uninsdeletevalue cleans it on uninstall.
+; Per-user auto-start. uninsdeletevalue cleans it on uninstall. Same value name
+; and format as SettingsService.SetAutoStart, which owns this key after install.
+; --minimized keeps a boot launch in the tray instead of popping the panel.
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; \
-  ValueType: string; ValueName: "JLNotes"; ValueData: """{app}\{#MyAppExeName}"""; \
+  ValueType: string; ValueName: "JLNotes"; ValueData: """{app}\{#MyAppExeName}"" --minimized"; \
   Flags: uninsdeletevalue; Tasks: startupicon
 
 [Run]
@@ -476,6 +479,10 @@ begin
       NotesDir := ExpandConstant('{%USERPROFILE%}') + NotesSubPath;
       DelTree(NotesDir, True, True, True);
     end;
+    // The Run value may have been written by the in-app Settings toggle rather
+    // than the startupicon task, in which case uninsdeletevalue never recorded
+    // it -- delete it unconditionally so no stale auto-start survives.
+    RegDeleteValue(HKCU, 'Software\Microsoft\Windows\CurrentVersion\Run', 'JLNotes');
     // Clear the removed shortcuts' icons from the shell cache too.
     RefreshShellIcons();
   end;

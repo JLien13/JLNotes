@@ -41,7 +41,7 @@ Download `JLNotes-Setup.exe` from [Releases](../../releases) and run it. The ins
 
 ### Options during install:
 - Create desktop shortcut
-- Run on Windows startup
+- Run on Windows startup (off by default; can be changed any time in Settings)
 
 ## Building from Source
 
