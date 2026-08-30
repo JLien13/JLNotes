@@ -84,6 +84,48 @@ public partial class MainPanelWindow : Window
         Top = workArea.Top + padding;
     }
 
+    /// <summary>Bounds to persist across sessions: the normal-state bounds even
+    /// while maximized, so a restart brings back the un-maximized panel.</summary>
+    public WindowPosition GetPersistedGeometry()
+    {
+        if ((_isMaximized || WindowState != WindowState.Normal)
+            && _restoreWidth >= MinWidth && _restoreHeight >= MinHeight)
+            return new WindowPosition
+            { X = _restoreLeft, Y = _restoreTop, Width = _restoreWidth, Height = _restoreHeight };
+
+        return new WindowPosition { X = Left, Y = Top, Width = Width, Height = Height };
+    }
+
+    /// <summary>Split-view divider position: the note-list pane's width. The
+    /// GridSplitter writes an absolute Width on drag, so reading it back works
+    /// whether or not split view was shown this session.</summary>
+    public double GetSplitListWidth() =>
+        SplitListColumn.Width.IsAbsolute ? SplitListColumn.Width.Value : 0;
+
+    public void ApplySplitListWidth(double width)
+    {
+        if (width >= SplitListColumn.MinWidth)
+            SplitListColumn.Width = new GridLength(width);
+    }
+
+    /// <summary>Apply saved bounds if present and still at least partly on a
+    /// screen (monitors change); otherwise keep the default top-right placement.</summary>
+    public void ApplyPersistedGeometry(WindowPosition saved)
+    {
+        if (saved.Width < MinWidth || saved.Height < MinHeight) return;
+
+        var virtualScreen = new Rect(
+            SystemParameters.VirtualScreenLeft, SystemParameters.VirtualScreenTop,
+            SystemParameters.VirtualScreenWidth, SystemParameters.VirtualScreenHeight);
+        if (!virtualScreen.IntersectsWith(new Rect(saved.X, saved.Y, saved.Width, saved.Height)))
+            return;
+
+        Left = saved.X;
+        Top = saved.Y;
+        Width = saved.Width;
+        Height = saved.Height;
+    }
+
     private void Header_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         if (e.ClickCount == 2)

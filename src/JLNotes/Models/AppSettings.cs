@@ -44,6 +44,11 @@ public class AppSettings
     // Empty = not yet set; MainViewModel migrates from the legacy gridView flag.
     [JsonPropertyName("viewMode")]
     public string ViewMode { get; set; } = "";
+
+    // Width of the split view's note-list pane (left of the divider).
+    // 0 (older json, or never saved) = keep the XAML default.
+    [JsonPropertyName("splitListWidth")]
+    public double SplitListWidth { get; set; }
 }
 
 public class WindowPosition
@@ -53,6 +58,13 @@ public class WindowPosition
 
     [JsonPropertyName("y")]
     public double Y { get; set; }
+
+    // 0 (json from older versions, or never saved) = no stored size.
+    [JsonPropertyName("width")]
+    public double Width { get; set; }
+
+    [JsonPropertyName("height")]
+    public double Height { get; set; }
 }
 
 public class WidgetPosition
