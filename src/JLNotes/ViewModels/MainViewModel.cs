@@ -517,7 +517,7 @@ public partial class MainViewModel : ObservableObject
         };
         if (dialog.ShowDialog() == true)
         {
-            ExportService.ExportToWord(selected, dialog.FileName);
+            ExportService.ExportToWord(selected, dialog.FileName, _noteService.GetAttachmentsDir);
             IsSelectMode = false;
         }
     }

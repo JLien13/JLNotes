@@ -13,7 +13,8 @@ namespace JLNotes.Helpers;
 
 public static class FlowDocumentHelper
 {
-    private static readonly Regex AttachmentTokenRegex = new(@"\{\{(.+?)\}\}", RegexOptions.Compiled);
+    // Shared with ExportService: single source of truth for the {{token}} grammar.
+    internal static readonly Regex AttachmentTokenRegex = new(@"\{\{(.+?)\}\}", RegexOptions.Compiled);
     // Scheme'd URLs plus bare www. domains ("www.corvascular.com").
     private static readonly Regex UrlRegex = new(@"(?:https?://|www\.)\S+", RegexOptions.Compiled);
     // Task-list line: optional indent, "- [ ]" / "- [x]", optional trailing space.
@@ -25,6 +26,11 @@ public static class FlowDocumentHelper
 
     private static readonly HashSet<string> ImageExtensions = new(StringComparer.OrdinalIgnoreCase)
         { ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp" };
+
+    /// <summary>Single source of truth for which attachments count as images
+    /// (inline thumbnails here, embedded pictures in Word export).</summary>
+    internal static bool IsImageFile(string filename) =>
+        ImageExtensions.Contains(Path.GetExtension(filename));
 
     // Display cap for inline thumbnails (DIP); decode at up to 3x for hi-DPI crispness.
     private const double ThumbMaxWidth = 300;
@@ -312,7 +318,7 @@ public static class FlowDocumentHelper
     {
         var filePath = Path.Combine(attachmentsDir, filename);
 
-        if (File.Exists(filePath) && ImageExtensions.Contains(Path.GetExtension(filename)))
+        if (File.Exists(filePath) && IsImageFile(filename))
         {
             try
             {
