@@ -265,7 +265,7 @@
             <!-- Split (master-detail) view -->
             <Grid Visibility="{Binding IsSplitLayout, Converter={StaticResource BoolToVisibility}}">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="300" MinWidth="200" />
+                    <ColumnDefinition x:Name="SplitListColumn" Width="300" MinWidth="200" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" MinWidth="280" />
                 </Grid.ColumnDefinitions>
