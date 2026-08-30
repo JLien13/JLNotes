@@ -112,13 +112,17 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; \
 
 [Run]
 ; Install the .NET 10 Desktop Runtime only if it's actually missing. The .exe is
-; downloaded on the Ready page (NextButtonClick below) to {tmp} first.
+; downloaded in PrepareToInstall (works in silent mode too) to {tmp} first.
 Filename: "{tmp}\windowsdesktop-runtime-win-x64.exe"; Parameters: "/install /quiet /norestart"; \
   StatusMsg: "Installing .NET {#DotNetVersion} Desktop Runtime..."; \
   Check: not IsDotNetInstalled; Flags: skipifdoesntexist
 ; Offer to launch on the Finished page. Default checked.
 Filename: "{app}\{#MyAppExeName}"; Description: "Launch {#MyAppName} now"; \
   Flags: nowait postinstall skipifsilent
+; A silent upgrade never shows the Finished page, so relaunch the app it killed
+; ourselves -- tray-only (--minimized), like a boot launch.
+Filename: "{app}\{#MyAppExeName}"; Parameters: "--minimized"; \
+  Flags: nowait skipifnotsilent; Check: WasAppRunningAtStart
 
 [UninstallDelete]
 ; Remove the install dir (shipped files are auto-removed; this sweeps any
@@ -144,6 +148,16 @@ var
   // Set in InitializeUninstall by the keep-my-notes prompt; read in
   // CurUninstallStepChanged to actually delete the notes folder.
   WipeNotes: Boolean;
+
+  // Whether a tray instance was running when install began (PrepareToInstall);
+  // lets a silent upgrade relaunch the app it killed.
+  AppWasRunning: Boolean;
+
+// [Run] Check function: relaunch only what we stopped.
+function WasAppRunningAtStart(): Boolean;
+begin
+  Result := AppWasRunning;
+end;
 
 { ---------- shell icon-cache refresh (taskbar / desktop / Start) ---------- }
 // On an upgrade the .exe and tray.ico are replaced, but Windows keeps painting
@@ -313,9 +327,30 @@ end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
-  // Kill a running tray instance before file copy so its .exe/.dll aren't locked.
-  StopApp();
   Result := '';
+
+  // Kill a running tray instance before file copy so its .exe/.dll aren't locked.
+  // Remember whether it was running so a silent upgrade can relaunch it after.
+  AppWasRunning := IsAppRunning();
+  if AppWasRunning then
+    StopApp();
+
+  // Fetch the .NET Desktop Runtime here rather than on a wizard page so silent
+  // installs (/SILENT, /VERYSILENT) get it too -- PrepareToInstall always runs.
+  if not IsDotNetInstalled then
+  begin
+    try
+      DownloadTemporaryFile('{#DotNetInstallerUrl}',
+        'windowsdesktop-runtime-win-x64.exe', '', nil);
+    except
+      Result :=
+        'Could not download the .NET {#DotNetVersion} Desktop Runtime:' + #13#10 +
+        GetExceptionMessage + #13#10 + #13#10 +
+        'Check your internet connection and run this installer again.';
+    end;
+  end
+  else
+    Log('.NET {#DotNetVersion} Desktop Runtime already present -- skipping download.');
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
@@ -323,41 +358,6 @@ begin
   // Files are in place -- nudge Explorer to drop stale shortcut / taskbar icons.
   if CurStep = ssPostInstall then
     RefreshShellIcons();
-end;
-
-{ ---------- .NET runtime download on the Ready page ---------- }
-
-function NextButtonClick(CurPageID: Integer): Boolean;
-var
-  DownloadPage: TDownloadWizardPage;
-begin
-  Result := True;
-  if CurPageID = wpReady then
-  begin
-    if not IsDotNetInstalled then
-    begin
-      DownloadPage := CreateDownloadPage(SetupMessage(msgWizardPreparing),
-        SetupMessage(msgPreparingDesc), nil);
-      DownloadPage.Clear;
-      DownloadPage.Add('{#DotNetInstallerUrl}', 'windowsdesktop-runtime-win-x64.exe', '');
-      DownloadPage.Show;
-      try
-        try
-          DownloadPage.Download;
-        except
-          if DownloadPage.AbortedByUser then
-            Log('.NET runtime download aborted by user.')
-          else
-            SuppressibleMsgBox(AddPeriod(GetExceptionMessage), mbCriticalError, MB_OK, IDOK);
-          Result := False;
-        end;
-      finally
-        DownloadPage.Hide;
-      end;
-    end
-    else
-      Log('.NET {#DotNetVersion} Desktop Runtime already present -- skipping download.');
-  end;
 end;
 
 { ---------- per-scenario Welcome / Finished captions ---------- }
@@ -456,7 +456,8 @@ begin
   WipeNotes := False;
   NotesDir := ExpandConstant('{%USERPROFILE%}') + NotesSubPath;
 
-  if DirExists(NotesDir) then
+  // Silent uninstalls never prompt: notes are always kept (the safe default).
+  if DirExists(NotesDir) and not UninstallSilent then
   begin
     Prompt :=
       'Also delete your JL Notes notes from this PC?' + #13#10 + #13#10 +
