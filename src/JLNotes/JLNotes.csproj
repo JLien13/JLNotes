@@ -7,7 +7,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
     <ApplicationIcon>tray.ico</ApplicationIcon>
-    <Version>1.2.4</Version>
+    <Version>1.2.5</Version>
     <AssemblyTitle>JL Notes</AssemblyTitle>
     <Product>JL Notes</Product>
     <Description>A WPF sticky-notes app that integrates with Claude via shared markdown files.</Description>
