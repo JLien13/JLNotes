@@ -78,9 +78,13 @@ public partial class App : Application
         };
         _trayIcon.TrayLeftMouseUp += (_, _) => TogglePanel();
 
-        // Show the panel on startup
-        _mainPanel.Show();
-        _mainPanel.Activate();
+        // Show the panel on startup -- unless launched by the Windows Run key
+        // (--minimized), where the expected behavior is to sit quietly in the tray.
+        if (!e.Args.Contains("--minimized"))
+        {
+            _mainPanel.Show();
+            _mainPanel.Activate();
+        }
     }
 
     private void TogglePanel()

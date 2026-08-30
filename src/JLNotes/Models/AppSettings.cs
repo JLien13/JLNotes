@@ -4,8 +4,8 @@ namespace JLNotes.Models;
 
 public class AppSettings
 {
-    [JsonPropertyName("autoStart")]
-    public bool AutoStart { get; set; } = false;
+    // Auto-start intentionally lives ONLY in the HKCU Run registry value
+    // (see SettingsService.Get/SetAutoStart) -- no json mirror to drift.
 
     [JsonPropertyName("panelPosition")]
     public WindowPosition PanelPosition { get; set; } = new();

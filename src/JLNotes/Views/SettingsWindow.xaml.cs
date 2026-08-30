@@ -34,6 +34,7 @@ public partial class SettingsWindow : Window
         };
         CloseBehaviorCombo.SelectedIndex = settings.CloseBehavior == "quit" ? 1 : 0;
         ConfirmDeleteCheck.IsChecked = settings.ConfirmDelete;
+        AutoStartCheck.IsChecked = _settingsService.GetAutoStart();
 
         ProjectList.ItemsSource = _projects;
 
@@ -83,6 +84,20 @@ public partial class SettingsWindow : Window
         var settings = _settingsService.Load();
         settings.ConfirmDelete = ConfirmDeleteCheck.IsChecked == true;
         _settingsService.Save(settings);
+    }
+
+    private void AutoStart_Changed(object sender, RoutedEventArgs e)
+    {
+        if (!_initialized) return;
+
+        // Registry is the source of truth for auto-start; nothing to save in json.
+        _settingsService.SetAutoStart(AutoStartCheck.IsChecked == true);
+    }
+
+    private void Header_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ButtonState == MouseButtonState.Pressed)
+            DragMove();
     }
 
     private void AddProject_Click(object sender, RoutedEventArgs e)
