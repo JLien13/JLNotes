@@ -264,17 +264,18 @@ end;
 
 { ---------- version compare / install-state detection ---------- }
 
-function GetInstalledVersion(): String;
-var
-  V: String;
+// This installer is per-user only (PrivilegesRequired=lowest), so its own
+// install lives in HKCU. Ported from the VasoGuard installer: the two scopes
+// are looked up separately so an all-users copy (HKLM, from some earlier
+// admin install) is treated as a conflict rather than as "the installed
+// version" -- otherwise setup would lay a second copy beside it.
+function FindInstall(Root: Integer; var Version, UninstallExe: String): Boolean;
 begin
-  Result := '';
-  // Per-user install lives in HKCU; check HKLM too in case an older build was
-  // ever installed for all users.
-  if RegQueryStringValue(HKCU, UninstallRegKey, 'DisplayVersion', V) then
-    Result := V
-  else if RegQueryStringValue(HKLM, UninstallRegKey, 'DisplayVersion', V) then
-    Result := V;
+  Version := '';
+  UninstallExe := '';
+  Result := RegQueryStringValue(Root, UninstallRegKey, 'DisplayVersion', Version);
+  if Result then
+    RegQueryStringValue(Root, UninstallRegKey, 'UninstallString', UninstallExe);
 end;
 
 function CompareVersionParts(A, B: String): Integer;
@@ -300,8 +301,9 @@ end;
 
 function InitializeSetup(): Boolean;
 var
-  Cmp: Integer;
+  Cmp, Choice, RC: Integer;
   Prompt: String;
+  UninstExe, OtherVersion, Dummy: String;
 begin
   Result := True;
 
@@ -311,7 +313,19 @@ begin
     Exit;
   end;
 
-  InstalledVersion := GetInstalledVersion();
+  // Never stack a per-user copy on top of an all-users one (VasoGuard pattern).
+  if FindInstall(HKLM, OtherVersion, Dummy) then
+  begin
+    MsgBox('{#MyAppName} ' + OtherVersion + ' is already installed for all users of this computer.' + #13#10 + #13#10 +
+           'This installer sets up {#MyAppName} just for your user account. To avoid two copies, ' +
+           'uninstall the all-users copy first (Windows Settings > Apps > Installed apps), ' +
+           'then run this installer again.',
+           mbError, MB_OK);
+    Result := False;
+    Exit;
+  end;
+
+  FindInstall(HKCU, InstalledVersion, UninstExe);
   IsFreshInstall := (InstalledVersion = '');
   IsUpgrade := False; IsRepair := False; IsDowngrade := False;
 
@@ -319,7 +333,33 @@ begin
   begin
     Cmp := CompareVersionParts(InstalledVersion, '{#MyAppVersion}');
     if Cmp = 0 then
-      IsRepair := True
+    begin
+      // Exactly this version is installed: Repair, Remove, or Cancel (VasoGuard
+      // pattern). A silent run (scripted reinstall) never prompts and repairs.
+      IsRepair := True;
+      if not WizardSilent() then
+      begin
+        Choice := TaskDialogMsgBox('{#MyAppName} {#MyAppVersion} is already installed',
+          'Repair reinstalls every program file fresh from this installer. Use it if ' +
+          'files were deleted or changed, or the app will not start.' + #13#10 + #13#10 +
+          'Remove uninstalls {#MyAppName}. Your notes can be kept or deleted; the ' +
+          'uninstaller asks.',
+          mbConfirmation, MB_YESNOCANCEL, ['Repair', 'Remove', 'Cancel'], 0);
+        if Choice = IDNO then
+        begin
+          // Hand off to the recorded uninstaller and close setup. The uninstaller
+          // relaunches itself from temp, so there is nothing meaningful to wait on.
+          if UninstExe <> '' then
+            Exec(RemoveQuotes(UninstExe), '', '', SW_SHOW, ewNoWait, RC)
+          else
+            MsgBox('The uninstaller could not be found. Remove {#MyAppName} from ' +
+                   'Windows Settings > Apps > Installed apps instead.', mbError, MB_OK);
+          Result := False;
+        end
+        else if Choice <> IDYES then
+          Result := False;
+      end;
+    end
     else if Cmp < 0 then
       IsUpgrade := True
     else
