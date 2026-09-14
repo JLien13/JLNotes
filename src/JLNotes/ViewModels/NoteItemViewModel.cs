@@ -121,6 +121,42 @@ public partial class NoteItemViewModel : ObservableObject
         }
     }
 
+    /// <summary>Combo entry meaning "no project" (the note's Project is "").</summary>
+    public const string NoProject = "No project";
+
+    private List<string>? _projectChoices;
+
+    /// <summary>Split pane project picker items: "No project", every registered
+    /// project (projects.json, the same source as the header filter), plus this
+    /// note's own project if it is not registered. Loaded on first use only.</summary>
+    public List<string> ProjectChoices
+    {
+        get
+        {
+            if (_projectChoices != null) return _projectChoices;
+            var names = _projectService.Load().Select(p => p.Name).ToList();
+            if (!string.IsNullOrEmpty(_note.Project) && !names.Contains(_note.Project, StringComparer.OrdinalIgnoreCase))
+                names.Add(_note.Project);
+            _projectChoices = [NoProject, .. names];
+            return _projectChoices;
+        }
+    }
+
+    /// <summary>Split pane project picker value: EditProject with "" shown as
+    /// NoProject. Setting it commits at once through CommitSplitEdit.</summary>
+    public string SplitProjectChoice
+    {
+        get => string.IsNullOrEmpty(EditProject) ? NoProject : EditProject;
+        set
+        {
+            var project = value == NoProject ? "" : (value ?? "");
+            if (project == EditProject) return;
+            EditProject = project;
+            OnPropertyChanged();
+            CommitSplitEdit();
+        }
+    }
+
     [RelayCommand]
     private void ToggleExpand()
     {
@@ -185,6 +221,8 @@ public partial class NoteItemViewModel : ObservableObject
         EditTitle = _note.Title;
         EditTags = string.Join(", ", _note.Tags);
         IsEditingTags = false;
+        EditProject = _note.Project;
+        OnPropertyChanged(nameof(SplitProjectChoice));
         EditDocument = FlowDocumentHelper.BuildDocument(_note.Body, _noteService.GetAttachmentsDir(_note));
         _splitEditBaseline = FlowDocumentHelper.SerializeDocument(EditDocument);
     }
@@ -200,13 +238,16 @@ public partial class NoteItemViewModel : ObservableObject
         var newBody = FlowDocumentHelper.SerializeDocument(EditDocument);
         var newTitle = EditTitle ?? "";
         var newTags = ParseTags(EditTags);
+        var newProject = EditProject ?? "";
         var bodyChanged = newBody != _splitEditBaseline;
         var titleChanged = newTitle != _note.Title;
         var tagsChanged = !newTags.SequenceEqual(_note.Tags);
-        if (!bodyChanged && !titleChanged && !tagsChanged) return;
+        var projectChanged = newProject != _note.Project;
+        if (!bodyChanged && !titleChanged && !tagsChanged && !projectChanged) return;
 
         if (titleChanged) _note.Title = newTitle;
         if (tagsChanged) _note.Tags = newTags;
+        if (projectChanged) _note.Project = newProject;
         if (bodyChanged)
         {
             _note.Body = newBody;
@@ -220,6 +261,10 @@ public partial class NoteItemViewModel : ObservableObject
         OnPropertyChanged(nameof(Tags));
         OnPropertyChanged(nameof(HasTags));
         OnPropertyChanged(nameof(ShowTags));
+        OnPropertyChanged(nameof(Project));
+        OnPropertyChanged(nameof(ProjectColorBrush));
+        OnPropertyChanged(nameof(SubtitleText));
+        OnPropertyChanged(nameof(ShowSubtitleText));
         OnPropertyChanged(nameof(ReadDocument));
     }
 
