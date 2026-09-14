@@ -24,16 +24,21 @@ public sealed class UpdateService
     private const string FallbackRepoSlug = "JLien13/JLNotes";
     private const string UserAgent = "JLNotes";
 
-    private static readonly HttpClient Http = CreateClient();
+    // Static initializers run in textual order. CurrentVersion MUST come before
+    // Http: CreateClient() puts the version in the User-Agent, and having it
+    // declared below the client is what crashed Settings in 1.2.7 (null version
+    // inside the type initializer, so every later static access threw).
+    // UpdateServiceTests guards this order.
+    public static Version CurrentVersion { get; } =
+        Assembly.GetExecutingAssembly().GetName().Version is { } v
+            ? new Version(v.Major, v.Minor, Math.Max(v.Build, 0))
+            : new Version(0, 0, 0);
 
     /// <summary>"owner/repo" from the csproj RepositoryUrl (single source shared
     /// with installer\build.ps1's -Release publish step).</summary>
     public static string RepoSlug { get; } = ResolveRepoSlug();
 
-    public static Version CurrentVersion { get; } =
-        Assembly.GetExecutingAssembly().GetName().Version is { } v
-            ? new Version(v.Major, v.Minor, Math.Max(v.Build, 0))
-            : new Version(0, 0, 0);
+    private static readonly HttpClient Http = CreateClient();
 
     private readonly string _logDir;
 
