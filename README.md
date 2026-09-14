@@ -6,13 +6,19 @@ A lightweight WPF sticky-notes app that integrates with Claude Code via shared m
 
 ## Features
 
-- System tray app with quick-access note panel
+- System tray app with quick-access note panel (remembers its size and position)
 - Notes stored as markdown files with YAML frontmatter
+- List, grid, and split (master-detail) views with in-place editing
 - Project-based organization
 - Priority levels (high, medium, low) with visual indicators
 - Tag system with color coding
 - Search and filter notes
+- Clickable links (Ctrl+Click to open) and live `- [ ]` task checkboxes in note bodies
+- Paste or drag-drop images straight into a note (inline thumbnails)
+- Export notes to Word, embedded images included
+- Dark and light themes
 - File watcher — notes created externally (e.g. by Claude Code) appear instantly
+- Launching the app while it's already running just brings up the existing panel
 
 ## How It Works
 
@@ -37,7 +43,7 @@ Claude Code can create notes directly by writing markdown files to the notes fol
 
 ## Installation
 
-Download `JLNotes-Setup.exe` from [Releases](../../releases) and run it. The installer will download the .NET 10 Desktop Runtime automatically if needed.
+Download `JLNotes-Setup-<version>.exe` from [Releases](../../releases) and run it. The installer will download the .NET 10 Desktop Runtime automatically if needed (silent installs included: `/SILENT` upgrades in place and relaunches the app if it was running).
 
 ### Options during install:
 - Create desktop shortcut
