@@ -131,6 +131,16 @@ public partial class App : Application
         menu.IsOpen = true;
     }
 
+    // Tag chip (TagChipTemplate, every layout): require that tag in the search.
+    // Handled at preview time so a chip on a list card does not also toggle
+    // the card open.
+    private void TagChip_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is not string tag) return;
+        MainVm?.AddTagToSearch(tag);
+        e.Handled = true;
+    }
+
     // Split-pane tag editing (NoteDetailTemplate). The VM owns the state
     // (IsEditingTags, EditTags); these handlers only flip it and hand focus around.
     private void EditTags_Click(object sender, RoutedEventArgs e)
