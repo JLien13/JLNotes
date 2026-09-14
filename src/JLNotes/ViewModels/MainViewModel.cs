@@ -224,8 +224,12 @@ public partial class MainViewModel : ObservableObject
         RefreshFromCache();
     }
 
+    /// <summary>Tag chip click: require this tag in the search (see NoteSearch).</summary>
+    public void AddTagToSearch(string tag) => SearchText = Helpers.NoteSearch.AddTag(SearchText, tag);
+
     private void RefreshFromCache()
     {
+        var query = Helpers.NoteSearch.Parse(SearchText);
         var filtered = _cachedNotes.Where(n =>
             (SelectedProject == "Projects" || n.Project == SelectedProject) &&
             StatusFilter switch
@@ -234,10 +238,7 @@ public partial class MainViewModel : ObservableObject
                 "done" => n.Status == NoteStatus.Done,
                 _ => true
             } &&
-            (string.IsNullOrEmpty(SearchText) ||
-             n.Title.Contains(SearchText, StringComparison.OrdinalIgnoreCase) ||
-             n.Body.Contains(SearchText, StringComparison.OrdinalIgnoreCase) ||
-             n.Tags.Any(t => t.Contains(SearchText, StringComparison.OrdinalIgnoreCase)))
+            Helpers.NoteSearch.Matches(n, query)
         ).ToList();
 
         RebuildGroup(HighPriority, filtered.Where(n => n.Priority == NotePriority.High));

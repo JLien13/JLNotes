@@ -40,6 +40,19 @@
                 <MenuItem Header="Delete" Command="{Binding DeleteCommand}" />
             </ContextMenu>
 
+            <!-- The one tag chip. Click = require that tag in the search box
+                 (MainViewModel.AddTagToSearch, "#tag" grammar in NoteSearch). -->
+            <DataTemplate x:Key="TagChipTemplate">
+                <Border Background="{Binding Converter={StaticResource TagColor}}"
+                        CornerRadius="3" Padding="5,1" Margin="0,0,4,4"
+                        Cursor="Hand" ToolTip="Show notes with this tag"
+                        PreviewMouseLeftButtonUp="TagChip_Click">
+                    <TextBlock Text="{Binding}"
+                               Foreground="{Binding Converter={StaticResource TagTextColor}}"
+                               FontSize="10" FontFamily="Segoe UI" />
+                </Border>
+            </DataTemplate>
+
             <!-- Shared note editor: used by the inline card (lazily) and by the
                  split-view detail pane's edit mode. DataContext = NoteItemViewModel. -->
             <DataTemplate x:Key="NoteEditorTemplate">
@@ -181,16 +194,7 @@
                                     <WrapPanel />
                                 </ItemsPanelTemplate>
                             </ItemsControl.ItemsPanel>
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <Border Background="{Binding Converter={StaticResource TagColor}}"
-                                            CornerRadius="3" Padding="5,1" Margin="0,0,4,2">
-                                        <TextBlock Text="{Binding}"
-                                                   Foreground="{Binding Converter={StaticResource TagTextColor}}"
-                                                   FontSize="10" FontFamily="Segoe UI" />
-                                    </Border>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
+                            <ItemsControl.ItemTemplate><StaticResource ResourceKey="TagChipTemplate" /></ItemsControl.ItemTemplate>
                         </ItemsControl>
 
                         <!-- Subtitle: Project or Repo -->
@@ -279,32 +283,28 @@
 
                     <!-- Meta + tags (display) -->
                     <StackPanel Grid.Row="1" Margin="0,4,0,0">
-                        <TextBlock Style="{StaticResource SecondaryText}">
-                            <Run Text="{Binding Project, Mode=OneWay}" />
-                            <Run Text="   ·   " />
-                            <Run Text="{Binding TimeAgo, Mode=OneWay}" />
-                        </TextBlock>
+                        <!-- Project picker (assign / change in place) + age -->
+                        <StackPanel Orientation="Horizontal">
+                            <ComboBox Style="{StaticResource DarkComboBox}"
+                                      ItemsSource="{Binding ProjectChoices}"
+                                      SelectedItem="{Binding SplitProjectChoice}"
+                                      MinWidth="130" FontSize="12"
+                                      ToolTip="Project" />
+                            <TextBlock Style="{StaticResource SecondaryText}" VerticalAlignment="Center" Margin="10,0,0,0">
+                                <Run Text="·   " />
+                                <Run Text="{Binding TimeAgo, Mode=OneWay}" />
+                            </TextBlock>
+                        </StackPanel>
                         <!-- Tags: chips + "+ tag" while reading; click either to swap in a
                              comma-separated editor (same EditTags / ParseTags the list card
                              uses). Enter or focus loss commits via CommitSplitEdit; Esc reverts. -->
                         <Grid Margin="0,8,0,0">
                             <WrapPanel Visibility="{Binding IsEditingTags, Converter={StaticResource InverseBoolToVisibility}}">
-                                <ItemsControl ItemsSource="{Binding Tags}" Cursor="Hand"
-                                              PreviewMouseLeftButtonUp="EditTags_Click"
-                                              ToolTip="Click to edit tags">
+                                <ItemsControl ItemsSource="{Binding Tags}">
                                     <ItemsControl.ItemsPanel>
                                         <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
                                     </ItemsControl.ItemsPanel>
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <Border Background="{Binding Converter={StaticResource TagColor}}"
-                                                    CornerRadius="3" Padding="5,1" Margin="0,0,4,4">
-                                                <TextBlock Text="{Binding}"
-                                                           Foreground="{Binding Converter={StaticResource TagTextColor}}"
-                                                           FontSize="10" FontFamily="Segoe UI" />
-                                            </Border>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
+                                    <ItemsControl.ItemTemplate><StaticResource ResourceKey="TagChipTemplate" /></ItemsControl.ItemTemplate>
                                 </ItemsControl>
                                 <Button Content="+ tag" Style="{StaticResource SubtleButton}"
                                         FontSize="10" Padding="4,1" Margin="0,0,0,4"
