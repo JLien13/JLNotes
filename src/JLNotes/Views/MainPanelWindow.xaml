@@ -79,15 +79,24 @@
                               Style="{StaticResource DarkComboBox}"
                               Width="180" HorizontalAlignment="Left" />
 
-                    <!-- App version — tracks the assembly version (csproj <Version>). -->
-                    <TextBlock Grid.Column="0"
-                               Text="{Binding AppVersion}"
-                               Foreground="{DynamicResource TextMutedBrush}"
-                               FontFamily="Segoe UI" FontSize="11"
-                               VerticalAlignment="Center"
-                               HorizontalAlignment="Right"
-                               Margin="0,0,8,0"
-                               ToolTip="JL Notes version" />
+                    <!-- App version (tracks the csproj <Version>) plus the quiet
+                         self-update link that appears once a newer release is found. -->
+                    <StackPanel Grid.Column="0" Orientation="Horizontal"
+                                HorizontalAlignment="Right" VerticalAlignment="Center"
+                                Margin="0,0,8,0">
+                        <Button Content="{Binding UpdateLinkText}"
+                                Style="{StaticResource SubtleButton}"
+                                Foreground="{DynamicResource AccentBlueBrush}"
+                                FontSize="11" Padding="6,0" Margin="0,0,6,0"
+                                Visibility="{Binding HasUpdate, Converter={StaticResource BoolToVisibility}}"
+                                Click="UpdateLink_Click"
+                                ToolTip="A newer JL Notes is available. Click to install; the app will close and reopen." />
+                        <TextBlock Text="{Binding AppVersion}"
+                                   Foreground="{DynamicResource TextMutedBrush}"
+                                   FontFamily="Segoe UI" FontSize="11"
+                                   VerticalAlignment="Center"
+                                   ToolTip="JL Notes version" />
+                    </StackPanel>
 
                     <Button Grid.Column="1" Content="+" Style="{StaticResource SubtleButton}"
                             FontSize="18" Margin="8,0"

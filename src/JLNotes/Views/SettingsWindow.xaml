@@ -131,9 +131,29 @@
                           Content="Launch JL Notes when Windows starts"
                           Style="{StaticResource DarkCheckBox}"
                           FontFamily="Segoe UI"
-                          Margin="0,0,0,16"
+                          Margin="0,0,0,12"
                           Checked="AutoStart_Changed"
                           Unchecked="AutoStart_Changed" />
+
+                <!-- Updates: version + manual check. The header link covers the
+                     quiet automatic check; this is the explicit face. -->
+                <Grid Margin="0,0,0,4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock x:Name="VersionText" VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextPrimaryBrush}" FontFamily="Segoe UI" />
+                    <Button Grid.Column="1" x:Name="UpdateButton"
+                            Content="Check for updates"
+                            Style="{StaticResource SubtleButton}"
+                            Foreground="{DynamicResource AccentBlueBrush}"
+                            Click="Update_Click" />
+                </Grid>
+                <TextBlock x:Name="UpdateStatusText"
+                           Foreground="{DynamicResource TextSecondaryBrush}"
+                           FontFamily="Segoe UI" FontSize="11"
+                           TextWrapping="Wrap" Margin="0,0,0,16" />
             </StackPanel>
 
             <!-- Projects -->
