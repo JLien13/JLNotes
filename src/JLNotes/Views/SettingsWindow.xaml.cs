@@ -56,7 +56,7 @@ public partial class SettingsWindow : Window
             if (_pendingUpdate == null)
             {
                 UpdateStatusText.Text = "Checking…";
-                var res = await app.Updater.CheckAsync();
+                var res = await app.CheckForUpdateAsync(); // shared with the header link
                 if (!res.Ok)
                     UpdateStatusText.Text = "Could not check for updates: " + res.Error;
                 else if (res.UpToDate)

@@ -123,15 +123,28 @@ public partial class App : Application
     /// <summary>The app's one updater instance (Settings and the header link share it).</summary>
     public UpdateService Updater => _updateService ??= new UpdateService(BaseDir);
 
+    private MainViewModel? MainVm => _mainPanel?.DataContext as MainViewModel;
+
     private async Task CheckForUpdateQuietlyAsync(MainViewModel mainVm)
     {
         if (mainVm.UpdateAvailableVersion != null) return; // found one; stop checking
         if (DateTime.UtcNow - _lastUpdateCheck < UpdateCheckEvery) return;
-        _lastUpdateCheck = DateTime.UtcNow;
+        await CheckForUpdateAsync();
+    }
 
+    /// <summary>
+    /// The one update check. Every caller (hourly quiet tick, Settings button)
+    /// goes through here, so whoever finds a newer release lights the header
+    /// link for everyone: a manual check in Settings must never know something
+    /// the header does not.
+    /// </summary>
+    public async Task<Helpers.UpdateCheckResult> CheckForUpdateAsync()
+    {
+        _lastUpdateCheck = DateTime.UtcNow;
         var res = await Updater.CheckAsync();
-        if (res.Ok && !res.UpToDate && res.Latest != null)
-            mainVm.UpdateAvailableVersion = res.Latest.ToString();
+        if (res.Ok && res.Latest != null && MainVm is { } vm)
+            vm.UpdateAvailableVersion = res.UpToDate ? null : res.Latest.ToString();
+        return res;
     }
 
     /// <summary>
