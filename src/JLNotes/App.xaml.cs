@@ -1,6 +1,7 @@
 using System.IO;
 using System.Threading;
 using System.Windows;
+using System.Windows.Threading;
 using Hardcodet.Wpf.TaskbarNotification;
 using JLNotes.Services;
 using JLNotes.ViewModels;
@@ -19,6 +20,17 @@ public partial class App : Application
     private NoteService? _noteService;
     private SettingsService? _settingsService;
     private ProjectService? _projectService;
+    private UpdateService? _updateService;
+
+    // Quiet update-check cadence (VS Code pattern, same as the MG Manager Hub):
+    // tick every 5 minutes so a long sleep can't skip a due check, but do one
+    // real check per hour at most, give up silently offline, and stop for good
+    // once an update is found.
+    private static readonly TimeSpan UpdateCheckEvery = TimeSpan.FromHours(1);
+    private static readonly TimeSpan UpdateTickEvery = TimeSpan.FromMinutes(5);
+    private DispatcherTimer? _updateTimer;
+    private DateTime _lastUpdateCheck = DateTime.MinValue;
+    private bool _updateRunning;
 
     private static readonly string BaseDir = AppPaths.BaseDir;
     private static readonly string LegacyDir = AppPaths.LegacyDir;
@@ -65,6 +77,7 @@ public partial class App : Application
         _noteService = new NoteService(AppPaths.NotesDir);
         _settingsService = new SettingsService(BaseDir);
         _projectService = new ProjectService(BaseDir);
+        _updateService = new UpdateService(BaseDir);
 
         // Load settings and apply theme
         var settings = _settingsService.Load();
@@ -98,6 +111,78 @@ public partial class App : Application
         {
             _mainPanel.Show();
             _mainPanel.Activate();
+        }
+
+        // Quiet self-update check: first tick right away, then on the cadence above.
+        _updateTimer = new DispatcherTimer { Interval = UpdateTickEvery };
+        _updateTimer.Tick += (_, _) => _ = CheckForUpdateQuietlyAsync(mainVm);
+        _updateTimer.Start();
+        _ = CheckForUpdateQuietlyAsync(mainVm);
+    }
+
+    /// <summary>The app's one updater instance (Settings and the header link share it).</summary>
+    public UpdateService Updater => _updateService ??= new UpdateService(BaseDir);
+
+    private async Task CheckForUpdateQuietlyAsync(MainViewModel mainVm)
+    {
+        if (mainVm.UpdateAvailableVersion != null) return; // found one; stop checking
+        if (DateTime.UtcNow - _lastUpdateCheck < UpdateCheckEvery) return;
+        _lastUpdateCheck = DateTime.UtcNow;
+
+        var res = await Updater.CheckAsync();
+        if (res.Ok && !res.UpToDate && res.Latest != null)
+            mainVm.UpdateAvailableVersion = res.Latest.ToString();
+    }
+
+    /// <summary>
+    /// Downloads and launches the latest installer. One run at a time; a second
+    /// click while a download is in flight is ignored. <paramref name="status"/>
+    /// receives progress text for whichever face (header link, Settings) asked.
+    /// On success this process is about to be killed by the installer, which
+    /// relaunches the new version afterwards, so session state is persisted first.
+    /// </summary>
+    public async Task<(bool Launched, string Message)> RunUpdateAsync(Action<string>? status = null)
+    {
+        if (_updateRunning) return (false, "An update is already in progress.");
+        _updateRunning = true;
+        try
+        {
+            status?.Invoke("Downloading…");
+            var progress = new Progress<(long Got, long? Total)>(p =>
+            {
+                var mb = (p.Got / 1048576.0).ToString("0.0");
+                status?.Invoke(p.Total is { } t && t > 0
+                    ? $"Downloading… {p.Got * 100 / t}%"
+                    : $"Downloading… {mb} MB");
+            });
+
+            // The installer force-kills us (tray apps hide on close, so it cannot
+            // ask nicely). Flush edits and window geometry now, exactly as OnExit would.
+            PersistSessionState();
+
+            var result = await Updater.ApplyAsync(progress);
+            status?.Invoke(result.Message);
+            return result;
+        }
+        finally
+        {
+            _updateRunning = false;
+        }
+    }
+
+    /// <summary>Everything OnExit saves, callable before an external kill.</summary>
+    private void PersistSessionState()
+    {
+        (_mainPanel?.DataContext as MainViewModel)?.CommitSplitEdit();
+
+        if (_mainPanel != null && _settingsService != null)
+        {
+            var settings = _settingsService.Load();
+            settings.PanelPosition = _mainPanel.GetPersistedGeometry();
+            var splitWidth = _mainPanel.GetSplitListWidth();
+            if (splitWidth > 0)
+                settings.SplitListWidth = splitWidth;
+            _settingsService.Save(settings);
         }
     }
 
@@ -177,19 +262,10 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
-        // Final safety net: flush any in-place split-detail edit before teardown.
-        (_mainPanel?.DataContext as MainViewModel)?.CommitSplitEdit();
-
-        // Remember where the panel and split divider live for next launch.
-        if (_mainPanel != null && _settingsService != null)
-        {
-            var settings = _settingsService.Load();
-            settings.PanelPosition = _mainPanel.GetPersistedGeometry();
-            var splitWidth = _mainPanel.GetSplitListWidth();
-            if (splitWidth > 0)
-                settings.SplitListWidth = splitWidth;
-            _settingsService.Save(settings);
-        }
+        // Final safety net: flush any in-place split-detail edit and remember
+        // where the panel and split divider live for next launch.
+        _updateTimer?.Stop();
+        PersistSessionState();
 
         _activationSignal?.Dispose();
         _trayIcon?.Dispose();
