@@ -1,0 +1,172 @@
+{
+  "generated_at": "2026-05-13T07:26:38.020736-05:00",
+  "rep": {
+    "rep": {
+      "slug": "carissa-tomer",
+      "display_name": "Carissa Tomer",
+      "email": "carissa@ultrasoundenergy.com",
+      "user_id": null,
+      "crm_contact_id": "48a0f370-ccd9-4ab6-9406-c4aad1fa4a79",
+      "title": "Vascular Technologist, RVT",
+      "phone": "941-302-0663"
+    },
+    "territory": {
+      "states": [
+        "FL"
+      ],
+      "area_codes": [
+        "352",
+        "727",
+        "813",
+        "863",
+        "941",
+        "239",
+        "321",
+        "407"
+      ],
+      "domains": [],
+      "account_ids": [],
+      "exclude_account_ids": []
+    },
+    "preferences": {
+      "max_calls_today": 12,
+      "max_followup_emails": 8,
+      "stale_quote_threshold_days": 7,
+      "stale_customer_threshold_days": 180,
+      "include_tradeshow_leads_days": 60,
+      "competitive_lookback_days": 30
+    }
+  },
+  "universe": {
+    "orgs": [],
+    "open_quotes": [],
+    "recent_orders": [],
+    "open_sales_tickets": [],
+    "recent_calls": [],
+    "stale_customers": [],
+    "tradeshow_leads": [],
+    "territory_bids": [],
+    "competitive_findings": [],
+    "mi_group_1_practices_count": 139,
+    "mi_group_1_hospitals_top_priority_count": 23,
+    "mi_group_1_hospitals_total_in_territory": 90,
+    "mi_group_2_practices_top500_count": 500,
+    "mi_group_2_practices_total_in_territory": 6495,
+    "crm_orgs_in_central_fl": 13,
+    "recent_calls_count": 1,
+    "tradeshow_leads_count": 0,
+    "historical_fl_orders_total": 77073.91,
+    "historical_fl_orders_count": 19
+  },
+  "ranked": {
+    "calls": [
+      {
+        "npi": "1295731396",
+        "provider_name": "SILVERMAN, STEVEN MD",
+        "specialty": "Vascular Surgery",
+        "city": "LARGO",
+        "phone": "7275847666",
+        "score": "55"
+      },
+      {
+        "npi": "1396857611",
+        "provider_name": "DOVGAN, PETER MD",
+        "specialty": "Vascular Surgery",
+        "city": "MELBOURNE",
+        "phone": "3217512707",
+        "score": "55"
+      },
+      {
+        "npi": "1659491983",
+        "provider_name": "ALVAREZ TORRES, NITZA MD",
+        "specialty": "Cardiology",
+        "city": "LEESBURG",
+        "phone": "3525043500",
+        "score": "50"
+      },
+      {
+        "npi": "1912904855",
+        "provider_name": "CALDERON, ERICK MD",
+        "specialty": "Cardiology",
+        "city": "LAKEWOOD RANCH",
+        "phone": "9419071113",
+        "score": "50"
+      },
+      {
+        "npi": "1821081688",
+        "provider_name": "VASUDEVAN, RAM MD",
+        "specialty": "Cardiology",
+        "city": "OCALA",
+        "phone": "3527323005",
+        "score": "50"
+      },
+      {
+        "npi": "1174741565",
+        "provider_name": "MORALES-PABON, CESAR MD",
+        "specialty": "Cardiology",
+        "city": "TAMPA",
+        "phone": "8138701747",
+        "score": "50"
+      },
+      {
+        "npi": "1265416283",
+        "provider_name": "BARBOUNIS, CONSTANTINE DPM",
+        "specialty": "Podiatry",
+        "city": "NAPLES",
+        "phone": "2395969890",
+        "score": "45"
+      },
+      {
+        "npi": "1043298904",
+        "provider_name": "ADCOCK, GEORGE MD",
+        "specialty": "Vascular Surgery",
+        "city": "ORLANDO",
+        "phone": "4078415111",
+        "score": "45"
+      },
+      {
+        "npi": "1922092709",
+        "provider_name": "SADIGHI, ABRAHAM MD",
+        "specialty": "Vascular Surgery",
+        "city": "FORT MYERS",
+        "phone": "2399391767",
+        "score": "45"
+      },
+      {
+        "npi": "1841491495",
+        "provider_name": "NAIR, DEEPAK MD",
+        "specialty": "Vascular Surgery",
+        "city": "SARASOTA",
+        "phone": "9413410042",
+        "score": "45"
+      },
+      {
+        "npi": "1790780229",
+        "provider_name": "DORSAY, DOUGLAS MD",
+        "specialty": "Vascular Surgery",
+        "city": "SARASOTA",
+        "phone": "9413716565",
+        "score": "45"
+      },
+      {
+        "npi": "1437268133",
+        "provider_name": "OTTO, JAMES MD",
+        "specialty": "Vascular Surgery",
+        "city": "INVERNESS",
+        "phone": "3527263646",
+        "score": "45"
+      }
+    ],
+    "stale_quotes": [],
+    "followups": [],
+    "prospects": []
+  },
+  "skipped_sources": [
+    "GREENFIELD hospitals (Group 2 acute care) — use MI page filter; not exported as CSV",
+    "Group 2 practices beyond top 500 (~6,000 rows) — use MI page",
+    "Open quotes / sales tickets / tradeshow leads — zero rows in territory",
+    "Competitive sweep last 30d — zero CRITICAL/HIGH findings",
+    "BIDS scanner — zero territory bids in seen_bids.json",
+    "Stale-quote / follow-up .eml drafts — no open quotes or recent customer interactions to nudge"
+  ]
+}

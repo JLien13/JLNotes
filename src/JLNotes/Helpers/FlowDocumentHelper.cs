@@ -19,10 +19,12 @@ public static class FlowDocumentHelper
     private static readonly Regex UrlRegex = new(@"(?:https?://|www\.)\S+", RegexOptions.Compiled);
     // Task-list line: optional indent, "- [ ]" / "- [x]", optional trailing space.
     private static readonly Regex CheckboxLineRegex = new(@"^(\s*)- \[( |x|X)\] ?", RegexOptions.Compiled);
-    private static readonly BrushConverter BrushConverter = new();
-    private static readonly Brush AccentBlueBrush = (Brush)BrushConverter.ConvertFromString("#4a9eff")!;
-    private static readonly Brush ForegroundBrush = (Brush)BrushConverter.ConvertFromString("#e0e0e0")!;
-    private static readonly Brush ThumbnailBorderBrush = (Brush)BrushConverter.ConvertFromString("#2a2a4a")!;
+    // Theme resource keys (defined in Resources/Colors.xaml and LightColors.xaml).
+    // Referenced dynamically so note bodies follow the active theme; hardcoded
+    // dark-theme hex values were unreadable on the light theme.
+    private const string TextPrimaryBrushKey = "TextPrimaryBrush";
+    private const string AccentBlueBrushKey = "AccentBlueBrush";
+    private const string BorderSubtleBrushKey = "BorderSubtleBrush";
 
     private static readonly HashSet<string> ImageExtensions = new(StringComparer.OrdinalIgnoreCase)
         { ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp" };
@@ -42,11 +44,11 @@ public static class FlowDocumentHelper
         var doc = new FlowDocument
         {
             Background = Brushes.Transparent,
-            Foreground = ForegroundBrush,
             FontFamily = new FontFamily("Segoe UI"),
             FontSize = 12,
             PagePadding = new Thickness(0)
         };
+        doc.SetResourceReference(FlowDocument.ForegroundProperty, TextPrimaryBrushKey);
 
         if (string.IsNullOrEmpty(bodyText))
         {
@@ -287,10 +289,10 @@ public static class FlowDocumentHelper
     {
         var link = new Hyperlink(new Run(url))
         {
-            Foreground = AccentBlueBrush,
             ToolTip = url + Environment.NewLine + "Ctrl+Click to open",
             Cursor = Cursors.Hand
         };
+        link.SetResourceReference(TextElement.ForegroundProperty, AccentBlueBrushKey);
         // Fires on Ctrl+Click inside an editable RichTextBox (IsDocumentEnabled);
         // a plain click keeps placing the caret for editing.
         link.Click += (_, _) => OpenUrl(url);
@@ -364,7 +366,7 @@ public static class FlowDocumentHelper
         // Tooltip and click are handled at the RichTextBox level (RichTextBoxBehavior)
         // because RichTextBox in edit mode intercepts mouse events before they reach inline UIElements.
         // The Tag property is what marks this as an attachment element.
-        return new Border
+        var border = new Border
         {
             Child = image,
             Tag = filename,
@@ -373,22 +375,24 @@ public static class FlowDocumentHelper
             Margin = new Thickness(0, 4, 0, 2),
             CornerRadius = new CornerRadius(4),
             BorderThickness = new Thickness(1),
-            BorderBrush = ThumbnailBorderBrush,
             Background = Brushes.Transparent
         };
+        border.SetResourceReference(Border.BorderBrushProperty, BorderSubtleBrushKey);
+        return border;
     }
 
     private static TextBlock CreateLink(string filename)
     {
-        return new TextBlock
+        var link = new TextBlock
         {
             Text = filename,
-            Foreground = AccentBlueBrush,
             TextDecorations = TextDecorations.Underline,
             Cursor = Cursors.Hand,
             FontSize = 12,
             FontFamily = new FontFamily("Segoe UI"),
             Tag = filename
         };
+        link.SetResourceReference(TextBlock.ForegroundProperty, AccentBlueBrushKey);
+        return link;
     }
 }

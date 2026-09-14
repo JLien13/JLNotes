@@ -1,0 +1,14 @@
+id,facility_name,address,city,zip,phone,status,historical_orders,historical_total,last_order_date,notes
+b8cc01f0-2648-40cc-a8c0-e16e232aa931,Bradenton Cardiology Center,316 Manatee Avenue West,Bradenton,34205,941-748-2277,active,2,31690.0,2015-08-11,PRIOR CUSTOMER - 11yr lapse
+5de87ef6-05b8-40f3-bf8d-0ca1d3e51bee,Access Health Care,5344 Spring Hill Drive,Spring Hill,34606,352-688-8116,active,1,87.01,2014-09-15,PRIOR CUSTOMER - 12yr lapse
+1d1bdaa1-fa4e-4030-be2e-8b67aaef5c79,Bay Surgical Specialists,960 7th Ave N,St. Petersburg,33705,727-821-8101,active,0,0,,"In CRM, never purchased"
+abcd4873-e07b-486b-ab46-540a7fabfdf5,BayCare Health System,2985 Drew St,Clearwater,33759,727-820-8200,active,0,0,,"IDN - In CRM, never purchased"
+5157f07a-37b0-465b-96e3-698f35ecc569,Cario Medical Restore,1249 Tallevast Rd,Sarasota,34243,941-373-5754,active,0,0,,"In CRM, never purchased"
+430deedf-e50a-4a76-95d0-830234bc921c,Central Florida Heart Group,6600 SW Hwy 200 Suite 200,Ocala,34476,352-237-4116,active,0,0,,"In CRM, never purchased"
+0d8bc993-a8b0-4a13-818a-755f968d44bb,Lakeland Regional Medical Center,1324 Lakeland Hills Blvd,Lakeland,33805,863-687-1100,active,0,0,,"892 beds, MI Tier B UPGRADE target"
+8087ea55-2eab-4156-a962-7c3b1055e6f7,Manatee Memorial Hospital,206 2nd Street East,Bradenton,34208,941-745-7279,lead,0,0,,"LEAD status, MI Tier B UPGRADE target"
+36e943bd-34a6-401a-b142-7509d46fbb3f,Northside Hospital,6000 49th St N,St. Petersburg,33709,727-521-4411,active,0,0,,"In CRM, never purchased"
+e6d0a92b-3b09-4c00-bf48-2690712cd1ed,Radiology Associates of Ocala,1901 SE 18th Ave,Ocala,34471,352-671-4300,active,0,0,,"In CRM, never purchased"
+1d5d3ce0-c36c-4c06-93b1-48a351fee58f,The Villages Health,1020 Lake Sumter Landing,The Villages,32162,352-205-4032,active,0,0,,"In CRM, never purchased"
+025236e8-adce-4341-8c4e-08ebd1217948,UF Health Shands Hospital,1600 SW Archer Rd,Gainesville,32608,352-265-0111,active,0,0,,"1,054 beds, MI Tier A REPLACEMENT - highest priority"
+3b162d96-aee7-4e17-8f48-b3da23e9c5a3,Winter Haven Hospital,200 Avenue F NE,Winter Haven,33881,863-293-1121,active,0,0,,"508 beds, MI Tier B UPGRADE target"
