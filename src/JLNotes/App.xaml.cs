@@ -131,6 +131,41 @@ public partial class App : Application
         menu.IsOpen = true;
     }
 
+    // Split-pane tag editing (NoteDetailTemplate). The VM owns the state
+    // (IsEditingTags, EditTags); these handlers only flip it and hand focus around.
+    private void EditTags_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is NoteItemViewModel vm)
+            vm.IsEditingTags = true;
+    }
+
+    private void TagsEditBox_IsVisibleChanged(object sender, DependencyPropertyChangedEventArgs e)
+    {
+        if (e.NewValue is true && sender is System.Windows.Controls.TextBox box)
+        {
+            box.Focus();
+            box.CaretIndex = box.Text.Length;
+        }
+    }
+
+    private void TagsEditBox_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.TextBox box || box.DataContext is not NoteItemViewModel vm) return;
+        if (e.Key == System.Windows.Input.Key.Escape)
+            vm.EditTags = string.Join(", ", vm.Tags); // revert, then fall through to close
+        else if (e.Key != System.Windows.Input.Key.Enter)
+            return;
+        e.Handled = true;
+        vm.IsEditingTags = false; // collapsing the box drops focus -> TagsEditBox_Done commits
+    }
+
+    private void TagsEditBox_Done(object sender, System.Windows.Input.KeyboardFocusChangedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is not NoteItemViewModel vm) return;
+        vm.IsEditingTags = false;
+        vm.CommitSplitEdit();
+    }
+
     /// <summary>The app's one updater instance (Settings and the header link share it).</summary>
     public UpdateService Updater => _updateService ??= new UpdateService(BaseDir);
 
