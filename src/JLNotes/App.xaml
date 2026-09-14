@@ -17,6 +17,29 @@
             <converters:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibility" />
             <converters:NullToVisibilityConverter x:Key="NullToVisibility" />
 
+            <!-- The one note actions menu. Right-click on a list/grid card, right-click
+                 on a split-view row, and the ⋮ button on the selected note all open
+                 this exact menu (x:Shared=False gives each placement its own instance;
+                 the DataContext is the NoteItemViewModel of the note it was opened on).
+                 Delete goes through NoteItemViewModel.Delete, which honors the
+                 "Confirm before deleting notes" setting. -->
+            <ContextMenu x:Key="NoteActionsMenu" x:Shared="False">
+                <MenuItem Header="Priority">
+                    <MenuItem Header="High" Command="{Binding SetPriorityHighCommand}" />
+                    <MenuItem Header="Medium" Command="{Binding SetPriorityMediumCommand}" />
+                    <MenuItem Header="Low" Command="{Binding SetPriorityLowCommand}" />
+                </MenuItem>
+                <MenuItem Header="{Binding StatusMenuText}" Command="{Binding ToggleStatusCommand}" />
+                <Separator />
+                <MenuItem Header="Open in Claude" Command="{Binding OpenInClaudeCommand}" />
+                <MenuItem Header="Export to Word" Command="{Binding ExportToWordCommand}" />
+                <Separator />
+                <MenuItem Header="Copy Path" Command="{Binding CopyPathCommand}" />
+                <MenuItem Header="Reveal in Explorer" Command="{Binding RevealInExplorerCommand}" />
+                <Separator />
+                <MenuItem Header="Delete" Command="{Binding DeleteCommand}" />
+            </ContextMenu>
+
             <!-- Shared note editor: used by the inline card (lazily) and by the
                  split-view detail pane's edit mode. DataContext = NoteItemViewModel. -->
             <DataTemplate x:Key="NoteEditorTemplate">
@@ -111,26 +134,8 @@
                         Margin="0,0,0,0">
                 <Border Style="{StaticResource NoteItemBorder}" Cursor="Hand"
                         behaviors:NoteDragDrop.IsEnabled="True"
-                        CornerRadius="0,4,4,0">
-                    <!-- Context Menu -->
-                    <Border.ContextMenu>
-                        <ContextMenu>
-                            <MenuItem Header="Priority">
-                                <MenuItem Header="High" Command="{Binding SetPriorityHighCommand}" />
-                                <MenuItem Header="Medium" Command="{Binding SetPriorityMediumCommand}" />
-                                <MenuItem Header="Low" Command="{Binding SetPriorityLowCommand}" />
-                            </MenuItem>
-                            <MenuItem Header="{Binding StatusMenuText}" Command="{Binding ToggleStatusCommand}" />
-                            <Separator />
-                            <MenuItem Header="Open in Claude" Command="{Binding OpenInClaudeCommand}" />
-                            <MenuItem Header="Export to Word" Command="{Binding ExportToWordCommand}" />
-                            <Separator />
-                            <MenuItem Header="Copy Path" Command="{Binding CopyPathCommand}" />
-                            <MenuItem Header="Reveal in Explorer" Command="{Binding RevealInExplorerCommand}" />
-                            <Separator />
-                            <MenuItem Header="Delete" Command="{Binding DeleteCommand}" />
-                        </ContextMenu>
-                    </Border.ContextMenu>
+                        CornerRadius="0,4,4,0"
+                        ContextMenu="{StaticResource NoteActionsMenu}">
 
                     <Border.InputBindings>
                         <MouseBinding MouseAction="LeftClick" Command="{Binding ToggleExpandCommand}" />
@@ -221,7 +226,9 @@
             <!-- Split view: compact left-rail row. Lightweight so the virtualized
                  ListBox stays instant even with thousands of notes. -->
             <DataTemplate x:Key="SplitRowTemplate">
-                <Border Padding="9,7" BorderThickness="3,0,0,0" BorderBrush="{Binding ProjectColorBrush}">
+                <Border Padding="9,7" BorderThickness="3,0,0,0" BorderBrush="{Binding ProjectColorBrush}"
+                        Background="Transparent"
+                        ContextMenu="{StaticResource NoteActionsMenu}">
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" />
@@ -251,10 +258,24 @@
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
 
-                    <!-- Title — editable in place, styled like the rendered title -->
-                    <TextBox Grid.Row="0"
-                             Style="{StaticResource InPlaceTitleBox}"
-                             Text="{Binding EditTitle, UpdateSourceTrigger=PropertyChanged}" />
+                    <!-- Title — editable in place, styled like the rendered title —
+                         plus the ⋮ actions button (same menu as right-click). -->
+                    <Grid Grid.Row="0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox Grid.Column="0"
+                                 Style="{StaticResource InPlaceTitleBox}"
+                                 Text="{Binding EditTitle, UpdateSourceTrigger=PropertyChanged}" />
+                        <Button Grid.Column="1" Content="&#x22EE;"
+                                Style="{StaticResource SubtleButton}"
+                                FontSize="18" Padding="8,0" Margin="8,0,0,0"
+                                VerticalAlignment="Top"
+                                ToolTip="Note actions"
+                                ContextMenu="{StaticResource NoteActionsMenu}"
+                                Click="NoteMenuButton_Click" />
+                    </Grid>
 
                     <!-- Meta + tags (display) -->
                     <StackPanel Grid.Row="1" Margin="0,4,0,0">
