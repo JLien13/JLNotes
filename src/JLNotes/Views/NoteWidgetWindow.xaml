@@ -19,8 +19,6 @@
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
-            <Ellipse Grid.Column="0" Style="{StaticResource PriorityDot}"
-                     Fill="{Binding PriorityBrush}" />
             <TextBlock Grid.Column="1" Text="{Binding Title}"
                        Style="{StaticResource BaseText}"
                        TextTrimming="CharacterEllipsis"

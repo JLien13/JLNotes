@@ -118,14 +118,6 @@ public partial class NoteItemViewModel : ObservableObject
         }
     }
 
-    public Brush PriorityBrush => Priority switch
-    {
-        NotePriority.High => new SolidColorBrush(Color.FromRgb(0xEF, 0x44, 0x44)),
-        NotePriority.Medium => new SolidColorBrush(Color.FromRgb(0xF5, 0x9E, 0x0B)),
-        NotePriority.Low => new SolidColorBrush(Color.FromRgb(0x64, 0x9E, 0xCF)),
-        _ => Brushes.Gray
-    };
-
     [RelayCommand]
     private void ToggleExpand()
     {
@@ -231,7 +223,6 @@ public partial class NoteItemViewModel : ObservableObject
         _note.Priority = priority;
         _noteService.Save(_note);
         OnPropertyChanged(nameof(Priority));
-        OnPropertyChanged(nameof(PriorityBrush));
         NoteChanged?.Invoke();
     }
 
