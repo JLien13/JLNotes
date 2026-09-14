@@ -219,6 +219,24 @@ public partial class MainPanelWindow : Window
         MaximizeButton.ToolTip = _isMaximized ? "Restore Down" : "Maximize";
     }
 
+    private async void UpdateLink_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainViewModel mainVm || Application.Current is not App app) return;
+
+        var confirm = MessageBox.Show(this,
+            $"Update JL Notes to {mainVm.UpdateAvailableVersion}?\n\nThe app will close and reopen on the new version. Your notes are untouched.",
+            "Update JL Notes", MessageBoxButton.OKCancel, MessageBoxImage.Question);
+        if (confirm != MessageBoxResult.OK) return;
+
+        var result = await app.RunUpdateAsync(text => mainVm.UpdateStatus = text);
+        if (!result.Launched)
+        {
+            // Give the failure a moment on the link, then restore the plain "Update to X".
+            await Task.Delay(4000);
+            mainVm.UpdateStatus = null;
+        }
+    }
+
     private void Settings_Click(object sender, RoutedEventArgs e)
     {
         if (DataContext is not MainViewModel mainVm) return;

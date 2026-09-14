@@ -38,7 +38,49 @@ public partial class SettingsWindow : Window
 
         ProjectList.ItemsSource = _projects;
 
+        VersionText.Text = $"Version {UpdateService.CurrentVersion}";
+
         _initialized = true;
+    }
+
+    // Settings face of the self-updater. First click checks; if a newer release
+    // exists the button becomes "Install X" and the next click downloads + runs it.
+    private Version? _pendingUpdate;
+
+    private async void Update_Click(object sender, RoutedEventArgs e)
+    {
+        if (Application.Current is not App app) return;
+        UpdateButton.IsEnabled = false;
+        try
+        {
+            if (_pendingUpdate == null)
+            {
+                UpdateStatusText.Text = "Checking…";
+                var res = await app.Updater.CheckAsync();
+                if (!res.Ok)
+                    UpdateStatusText.Text = "Could not check for updates: " + res.Error;
+                else if (res.UpToDate)
+                    UpdateStatusText.Text = "You're on the latest version.";
+                else
+                {
+                    _pendingUpdate = res.Latest;
+                    UpdateStatusText.Text = $"Version {res.Latest} is available. Installing closes and reopens the app; your notes are untouched.";
+                    UpdateButton.Content = $"Install {res.Latest}";
+                }
+                return;
+            }
+
+            var result = await app.RunUpdateAsync(text => UpdateStatusText.Text = text);
+            if (!result.Launched)
+            {
+                _pendingUpdate = null;
+                UpdateButton.Content = "Check for updates";
+            }
+        }
+        finally
+        {
+            UpdateButton.IsEnabled = true;
+        }
     }
 
     private void ThemeCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
