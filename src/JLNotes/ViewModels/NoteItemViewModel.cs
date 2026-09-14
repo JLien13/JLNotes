@@ -22,6 +22,9 @@ public partial class NoteItemViewModel : ObservableObject
     [ObservableProperty] private string _editBranch;
     [ObservableProperty] private string _editRepo;
     [ObservableProperty] private string _editTags;
+
+    // Split pane: true while the comma-separated tag editor replaces the chips.
+    [ObservableProperty] private bool _isEditingTags;
     [ObservableProperty] private bool _isSelected;
     [ObservableProperty] private bool _isSelectMode;
 
@@ -151,9 +154,7 @@ public partial class NoteItemViewModel : ObservableObject
         _note.Project = EditProject;
         _note.Branch = EditBranch;
         _note.Repo = EditRepo;
-        _note.Tags = EditTags
-            .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
-            .ToList();
+        _note.Tags = ParseTags(EditTags);
         _noteService.Save(_note);
         IsExpanded = false;
         OnPropertyChanged(nameof(Title));
@@ -182,6 +183,8 @@ public partial class NoteItemViewModel : ObservableObject
     public void BeginSplitEdit()
     {
         EditTitle = _note.Title;
+        EditTags = string.Join(", ", _note.Tags);
+        IsEditingTags = false;
         EditDocument = FlowDocumentHelper.BuildDocument(_note.Body, _noteService.GetAttachmentsDir(_note));
         _splitEditBaseline = FlowDocumentHelper.SerializeDocument(EditDocument);
     }
@@ -196,11 +199,14 @@ public partial class NoteItemViewModel : ObservableObject
 
         var newBody = FlowDocumentHelper.SerializeDocument(EditDocument);
         var newTitle = EditTitle ?? "";
+        var newTags = ParseTags(EditTags);
         var bodyChanged = newBody != _splitEditBaseline;
         var titleChanged = newTitle != _note.Title;
-        if (!bodyChanged && !titleChanged) return;
+        var tagsChanged = !newTags.SequenceEqual(_note.Tags);
+        if (!bodyChanged && !titleChanged && !tagsChanged) return;
 
         if (titleChanged) _note.Title = newTitle;
+        if (tagsChanged) _note.Tags = newTags;
         if (bodyChanged)
         {
             _note.Body = newBody;
@@ -211,8 +217,20 @@ public partial class NoteItemViewModel : ObservableObject
 
         OnPropertyChanged(nameof(Title));
         OnPropertyChanged(nameof(Body));
+        OnPropertyChanged(nameof(Tags));
+        OnPropertyChanged(nameof(HasTags));
+        OnPropertyChanged(nameof(ShowTags));
         OnPropertyChanged(nameof(ReadDocument));
     }
+
+    /// <summary>The one tag parser: comma-separated text to a trimmed,
+    /// de-duplicated (case-sensitive) list. Used by the list card's Save and the
+    /// split pane's commit.</summary>
+    public static List<string> ParseTags(string? text) =>
+        (text ?? "")
+            .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .Distinct()
+            .ToList();
 
     [RelayCommand]
     private void SetPriorityHigh() => SetPriority(NotePriority.High);

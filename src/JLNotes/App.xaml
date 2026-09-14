@@ -284,23 +284,43 @@
                             <Run Text="   ·   " />
                             <Run Text="{Binding TimeAgo, Mode=OneWay}" />
                         </TextBlock>
-                        <ItemsControl ItemsSource="{Binding Tags}"
-                                      Visibility="{Binding HasTags, Converter={StaticResource BoolToVisibility}}"
-                                      Margin="0,8,0,0">
-                            <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <Border Background="{Binding Converter={StaticResource TagColor}}"
-                                            CornerRadius="3" Padding="5,1" Margin="0,0,4,4">
-                                        <TextBlock Text="{Binding}"
-                                                   Foreground="{Binding Converter={StaticResource TagTextColor}}"
-                                                   FontSize="10" FontFamily="Segoe UI" />
-                                    </Border>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
+                        <!-- Tags: chips + "+ tag" while reading; click either to swap in a
+                             comma-separated editor (same EditTags / ParseTags the list card
+                             uses). Enter or focus loss commits via CommitSplitEdit; Esc reverts. -->
+                        <Grid Margin="0,8,0,0">
+                            <WrapPanel Visibility="{Binding IsEditingTags, Converter={StaticResource InverseBoolToVisibility}}">
+                                <ItemsControl ItemsSource="{Binding Tags}" Cursor="Hand"
+                                              PreviewMouseLeftButtonUp="EditTags_Click"
+                                              ToolTip="Click to edit tags">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Background="{Binding Converter={StaticResource TagColor}}"
+                                                    CornerRadius="3" Padding="5,1" Margin="0,0,4,4">
+                                                <TextBlock Text="{Binding}"
+                                                           Foreground="{Binding Converter={StaticResource TagTextColor}}"
+                                                           FontSize="10" FontFamily="Segoe UI" />
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <Button Content="+ tag" Style="{StaticResource SubtleButton}"
+                                        FontSize="10" Padding="4,1" Margin="0,0,0,4"
+                                        Foreground="{DynamicResource TextMutedBrush}"
+                                        ToolTip="Add or edit tags"
+                                        Click="EditTags_Click" />
+                            </WrapPanel>
+                            <TextBox Style="{StaticResource InPlaceTitleBox}"
+                                     FontSize="12" FontWeight="Normal"
+                                     Text="{Binding EditTags, UpdateSourceTrigger=PropertyChanged}"
+                                     Visibility="{Binding IsEditingTags, Converter={StaticResource BoolToVisibility}}"
+                                     ToolTip="Tags, separated by commas. Enter to save, Esc to cancel."
+                                     IsVisibleChanged="TagsEditBox_IsVisibleChanged"
+                                     LostKeyboardFocus="TagsEditBox_Done"
+                                     KeyDown="TagsEditBox_KeyDown" />
+                        </Grid>
                         <Border Height="1" Background="{DynamicResource BorderSubtleBrush}" Margin="0,12,0,0" />
                     </StackPanel>
 
