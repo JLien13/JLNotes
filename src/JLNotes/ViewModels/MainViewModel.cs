@@ -500,6 +500,48 @@ public partial class MainViewModel : ObservableObject
     /// call anytime — no-ops when nothing changed. Used by window blur/close.</summary>
     public void CommitSplitEdit() => SelectedSplitNote?.CommitSplitEdit();
 
+    /// <summary>Title a brand-new note gets until the user types one (Standard
+    /// Notes convention). It doubles as the file-name slug, so it must never be
+    /// blank; the view selects it on focus so typing replaces it.</summary>
+    public static string DefaultNewNoteTitle(DateTime created) =>
+        created.ToString("dddd, MMM d, yyyy 'at' h:mm tt");
+
+    /// <summary>
+    /// The one create path for every layout (the old modal is gone). Saves a
+    /// real file at once, then reveals the note where the user is looking:
+    /// selected in the split pane (editing primed), or expanded inline in the
+    /// list/grid. Anything that would hide a fresh Open note (search text, the
+    /// Done filter) is cleared first. Returns the item so the view can focus it.
+    /// </summary>
+    public NoteItemViewModel CreateNote()
+    {
+        var note = new Note
+        {
+            Title = DefaultNewNoteTitle(DateTime.Now),
+            Project = SelectedProject == "Projects" ? "" : SelectedProject,
+        };
+        _noteService.Save(note);
+
+        if (StatusFilter == "done") StatusFilter = "all";
+        if (!string.IsNullOrEmpty(SearchText))
+        {
+            SearchText = "";
+            // The setter arms the debounce; a rebuild 250 ms from now would swap the
+            // VM instances and drop the expanded/selected state set below.
+            _searchDebounce?.Stop();
+        }
+        RefreshNotes();
+
+        var item = AllNoteViewModels.Concat(SplitNotes).First(v => v.Note.FilePath == note.FilePath);
+        if (IsSplitLayout)
+        {
+            SelectedSplitNote = SplitNotes.First(v => v.Note.FilePath == note.FilePath);
+            return SelectedSplitNote;
+        }
+        item.Expand();
+        return item;
+    }
+
     partial void OnIsSelectModeChanged(bool value)
     {
         foreach (var vm in HighPriority.Concat(MediumPriority).Concat(LowPriority).Concat(SortedByDate))
