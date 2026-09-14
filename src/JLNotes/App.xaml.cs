@@ -120,6 +120,17 @@ public partial class App : Application
         _ = CheckForUpdateQuietlyAsync(mainVm);
     }
 
+    // The ⋮ button on the selected note (NoteDetailTemplate) opens its context
+    // menu on a plain left click, so the same NoteActionsMenu serves both
+    // right-click and the button.
+    private void NoteMenuButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement button || button.ContextMenu is not { } menu) return;
+        menu.PlacementTarget = button;
+        menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+        menu.IsOpen = true;
+    }
+
     /// <summary>The app's one updater instance (Settings and the header link share it).</summary>
     public UpdateService Updater => _updateService ??= new UpdateService(BaseDir);
 
