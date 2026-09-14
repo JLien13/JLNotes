@@ -59,8 +59,15 @@ public class NoteService : IDisposable
 
         if (string.IsNullOrEmpty(note.FilePath) || !File.Exists(note.FilePath))
         {
+            // Never reuse another note's file: same title on the same day (or two
+            // inline-created notes in one minute) used to overwrite each other.
             var fileName = note.GenerateFileName();
-            note.FilePath = Path.Combine(_notesDir, fileName);
+            var candidate = Path.Combine(_notesDir, fileName);
+            var stem = Path.GetFileNameWithoutExtension(fileName);
+            var ext = Path.GetExtension(fileName);
+            for (var n = 2; File.Exists(candidate); n++)
+                candidate = Path.Combine(_notesDir, $"{stem}-{n}{ext}");
+            note.FilePath = candidate;
         }
         note.Updated = DateTime.Now;
         // Record before writing: the watcher fires asynchronously and may beat
