@@ -1,5 +1,8 @@
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Threading;
 using JLNotes.Models;
 using JLNotes.ViewModels;
 using JLNotes.Services;
@@ -264,20 +267,40 @@ public partial class MainPanelWindow : Window
         Hide();
     }
 
+    // "+" creates the note inline (no modal): the VM saves and reveals it, and
+    // the view drops the caret into its title with the placeholder title
+    // selected, so typing replaces it. Same path in every layout.
     private void AddNote_Click(object sender, RoutedEventArgs e)
     {
         if (DataContext is not MainViewModel mainVm) return;
 
-        var newNote = new Note();
-        var detailVm = new NoteDetailViewModel(newNote, mainVm.NoteService, isNew: true);
-        var detailWindow = new NoteDetailWindow { DataContext = detailVm };
-        detailVm.Saved += () =>
+        var item = mainVm.CreateNote();
+
+        // The row/pane for the new item renders after this handler returns; find
+        // its title box once the layout pass has run.
+        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () => FocusTitleBoxFor(item));
+    }
+
+    private void FocusTitleBoxFor(NoteItemViewModel item)
+    {
+        foreach (var box in FindVisualChildren<TextBox>(this))
         {
-            detailWindow.Close();
-            mainVm.RefreshNotes();
-        };
-        detailVm.Closed += () => detailWindow.Close();
-        detailWindow.Show();
+            if (box.DataContext != item) continue;
+            if (box.GetBindingExpression(TextBox.TextProperty)?.ParentBinding.Path.Path != nameof(NoteItemViewModel.EditTitle)) continue;
+            box.Focus();
+            box.SelectAll();
+            return;
+        }
+    }
+
+    private static IEnumerable<T> FindVisualChildren<T>(DependencyObject root) where T : DependencyObject
+    {
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+        {
+            var child = VisualTreeHelper.GetChild(root, i);
+            if (child is T hit) yield return hit;
+            foreach (var deeper in FindVisualChildren<T>(child)) yield return deeper;
+        }
     }
 
     private void ScrollViewer_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
