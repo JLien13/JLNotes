@@ -1,0 +1,207 @@
+{
+  "generated_at": "2026-05-07T09:00:00-05:00",
+  "rep": {
+    "rep": {
+      "slug": "spencer-lien",
+      "display_name": "Spencer Lien",
+      "email": "spencer.lien@corvascular.com",
+      "user_id": "b07fd759-9774-4f22-86ce-60c9e1a33841"
+    },
+    "territory": {
+      "states": ["MN", "WI", "IA", "ND", "SD", "IL", "IN", "MI", "OH"],
+      "domains": [],
+      "account_ids": [],
+      "exclude_account_ids": []
+    },
+    "preferences": {
+      "max_calls_today": 12,
+      "max_followup_emails": 8,
+      "stale_quote_threshold_days": 7,
+      "stale_customer_threshold_days": 180,
+      "include_tradeshow_leads_days": 60,
+      "competitive_lookback_days": 30
+    }
+  },
+  "universe": {
+    "orgs_summary": {
+      "total_in_territory": 60,
+      "with_total_spent_gt_0": 0,
+      "with_customer_since_in_last_year": 4,
+      "note": "organizations.total_spent is not maintained; real customer signal comes from customer_orders + support_tickets joins"
+    },
+    "open_quotes": [],
+    "recent_orders": [
+      {
+        "id": "cee7e283-1cce-4af1-a516-2b063729e9bb",
+        "order_number": "260430-3541",
+        "facility_name": "American Medical Imaging, LLC",
+        "shipping_state": "IN",
+        "customer": "Zachary Hurley",
+        "customer_email": "zachary.hurley@ami-ii.com",
+        "total_amount": "5765.21",
+        "status": "delivered",
+        "created_at": "2026-04-30",
+        "shipped_date": "2026-05-01",
+        "order_source": "online_store"
+      },
+      {
+        "id": "375b20f5-459b-48ac-b0fd-dd82f0f80960",
+        "order_number": "260303-2396",
+        "facility_name": "Gundersen Health System",
+        "shipping_state": "WI",
+        "customer": "Sarah Skinner",
+        "customer_email": "pa2@gundersenhealth.org",
+        "total_amount": "611.00",
+        "status": "delivered",
+        "created_at": "2026-03-03",
+        "shipped_date": "2026-03-03",
+        "order_source": null
+      }
+    ],
+    "open_sales_tickets": [
+      {
+        "id": "b2231efe-e5b4-469d-9cb7-a7c03bdbfd58",
+        "ticket_id": "092693",
+        "facility_name": "Wyandot Memorial Hospital",
+        "shipping_state": "OH",
+        "product": "VasoGuard V10 GCX",
+        "serial_number": "D0010",
+        "status": "in_progress",
+        "first_name": "Jillian",
+        "last_name": "Yeater",
+        "email": "LCLements@wyandotmemorial.org",
+        "created_at": "2026-04-09"
+      },
+      {
+        "id": "eaffdf68-9c2e-481c-8b95-8b2ef8e0c571",
+        "ticket_id": "262651",
+        "facility_name": "Owosso Memorial Healthcare",
+        "shipping_state": "MI",
+        "product": "ProV2",
+        "serial_number": "VP39814",
+        "status": "in_progress",
+        "first_name": "Matt",
+        "last_name": "Jones",
+        "email": "mjones@memorialhealthcare.org",
+        "created_at": "2026-03-26"
+      },
+      {
+        "id": "6eae91ab-6ce2-480f-9846-15da3672b5d4",
+        "ticket_id": "102673",
+        "facility_name": "Mount Carmel West Hospital",
+        "shipping_state": "OH",
+        "product": "Falcon ProV2",
+        "serial_number": "VP65615",
+        "status": "in_progress",
+        "first_name": "Amanda",
+        "last_name": "Gaskins",
+        "email": "Amanda.Gaskins@mchs.com",
+        "created_at": "2026-03-10"
+      },
+      {
+        "id": "7599c098-648e-45c2-9aee-b85492cfde93",
+        "ticket_id": "162653",
+        "facility_name": "HSHS St. Joseph's Hospital - Breese",
+        "shipping_state": "IL",
+        "product": "VasoGuard F14",
+        "serial_number": "F14: 20120002",
+        "status": "in_progress",
+        "first_name": "Kevin",
+        "last_name": "Robke",
+        "email": "Kevin.Robke@TriMedX.com",
+        "created_at": "2026-01-16"
+      }
+    ],
+    "recent_calls_count": 21,
+    "recent_calls_top": [
+      {"date": "2026-05-04", "facility": "TRIMEDX", "subject": "Loaner return and software fix plan"},
+      {"date": "2026-04-30", "facility": "American Medical Imaging, LLC", "subject": "Confirming website order details"},
+      {"date": "2026-04-15", "facility": "Wyandot Memorial Hospital", "subject": "VasoGuard software update delivery and bug fix", "outcome": "Callback Scheduled"},
+      {"date": "2026-04-13", "facility": "Owosso Memorial Healthcare", "subject": "Falcon PVR crash troubleshooting and software reinstall plan", "outcome": "Callback Scheduled"},
+      {"date": "2026-04-03", "facility": "HSHS St. Joseph's - Breese", "subject": "VasoGuard troubleshooting and trade-in discussion"},
+      {"date": "2026-04-03", "facility": "Avera Heart Hospital of South Dakota", "subject": "VasoGuard status (may have been taken off floor) check and follow-up", "outcome": "Callback Scheduled"},
+      {"date": "2026-04-03", "facility": "Unity Point Health - Trinity Regional", "subject": "VasoGuard check-in, voicemail left for lab manager"}
+    ],
+    "stale_customers": [
+      {"facility_name": "Froedtert Pleasant Prairie Hospital", "shipping_state": "WI", "tag1": "Viasys"},
+      {"facility_name": "Kenosha Clinic - Kenosha Medical Center Campus", "shipping_state": "WI", "tag1": "Viasys"},
+      {"facility_name": "Trinity Health Minot", "shipping_state": "ND", "tag1": "Trinity"},
+      {"facility_name": "Henry Ford Health System", "shipping_state": "MI", "email_domain": "hfhs.org"},
+      {"facility_name": "Rush University Medical Center", "tag1": "2017INSLead"},
+      {"facility_name": "Optum", "shipping_state": "MN", "email_domain": "optum.com"},
+      {"facility_name": "Ketteringhealth", "shipping_state": "OH", "email_domain": "ketteringhealth.org"},
+      {"facility_name": "Essentia Health (6 sites)", "shipping_state": "MN/ND", "tag1": "Essentia"}
+    ],
+    "tradeshow_leads": [],
+    "territory_bids": [
+      {
+        "notice_id": "36C26226Q0719",
+        "title": "RFI 36C26226Q0719 VALL Viasonix Falcon Pro OR EQUAL Physiologic Vascular Testing System",
+        "agency": "262-NETWORK CONTRACT OFFICE 22 (36C262)",
+        "deadline": "May 08, 2026 at 07:00 PM CDT",
+        "status": "responded",
+        "state_match": ["IA", "IL", "MN", "ND", "SD", "WI"],
+        "url": "https://sam.gov/workspace/contract/opp/5e3219dab24e4445a7ef3989739932c1/view"
+      },
+      {
+        "notice_id": "36C25226Q0300",
+        "title": "Source Sought Parks Medical computerized Flo-Lab for the North Chicago VAMC",
+        "agency": "252-NETWORK CONTRACT OFFICE 12 (36C252)",
+        "deadline": "March 10, 2026 at 11:59 PM CDT",
+        "status": "relevant",
+        "state_match": ["IL"],
+        "url": "https://sam.gov/workspace/contract/opp/5c42d17081b043db948b777cebf580a4/view"
+      },
+      {
+        "notice_id": "36C26226Q0374",
+        "title": "Viasonix Falcon Pro OR EQUAL Physiologic Vascular Testing System",
+        "agency": "262-NETWORK CONTRACT OFFICE 22 (36C262)",
+        "deadline": "March 09, 2026 at 06:30 PM CDT",
+        "status": "responded",
+        "state_match": ["IA", "IL", "MN", "ND", "SD", "WI"],
+        "url": "https://sam.gov/workspace/contract/opp/b19177ccd22d44ae865be51f1bdaf518/view"
+      }
+    ],
+    "competitive_findings_summary": [
+      {"competitor": "Newman Medical", "severity": "CRITICAL", "date": "2026-04-03", "headline": "New ABI-500CL/600CL + public pricing"},
+      {"competitor": "Newman Medical", "severity": "HIGH", "date": "2026-04-03", "headline": "Google Ads conversion infrastructure live"},
+      {"competitor": "Carefusion-Viasys (Old VasoGuard)", "severity": "n/a", "date": null, "headline": "Legacy installs at 2 territory accounts (Froedtert PP, Kenosha)"},
+      {"competitor": "Parks Medical", "severity": "n/a", "date": null, "headline": "Direct switchout angle on the North Chicago VAMC bid"}
+    ]
+  },
+  "ranked": {
+    "calls": [
+      "HSHS St. Joseph's-Breese (IL) — Kevin Robke",
+      "Wyandot Memorial Hospital (OH) — Lisa Clements",
+      "American Medical Imaging (IN) — Zachary Hurley",
+      "Owosso Memorial Healthcare (MI) — Samantha Knapp / Matt Jones",
+      "Avera Heart Hospital SD — Steve Kruger",
+      "Mount Carmel West (OH) — Amanda Gaskins",
+      "Unity Point Trinity Regional (IA) — Jenna Matton",
+      "Avera Sacred Heart Yankton (SD) — TBD",
+      "Trinity Health Minot (ND) — TBD"
+    ],
+    "stale_quotes": [],
+    "followups": [
+      "kevin-robke__hshs-breese-f14-trade-in.eml",
+      "zachary-hurley__ami-post-delivery-onboarding.eml",
+      "lisa-clements__wyandot-software-update-delivery.eml"
+    ],
+    "prospects": [
+      "Froedtert Pleasant Prairie Hospital (WI)",
+      "Kenosha Clinic (WI)",
+      "Trinity Health Minot (ND)",
+      "Henry Ford Health System (MI)",
+      "Rush University Medical Center (IL)",
+      "Optum (MN)",
+      "Ketteringhealth (OH)",
+      "Essentia Health multi-site (MN/ND)"
+    ]
+  },
+  "skipped_sources": [
+    "iac_midwest_vascular_labs_csv",
+    "corvascular_market_intel_page",
+    "tradeshow_leads_180d",
+    "open_quote_requests_in_territory"
+  ]
+}

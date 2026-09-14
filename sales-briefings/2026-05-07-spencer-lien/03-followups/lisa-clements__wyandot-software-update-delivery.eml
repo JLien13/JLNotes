@@ -1,0 +1,89 @@
+Content-Type: multipart/alternative;
+ boundary="------------kQ4tN8vPzWxYbHmRfL3aDcEsG"
+Date: Thu, 7 May 2026 11:00:00 -0500
+MIME-Version: 1.0
+User-Agent: Mozilla Thunderbird
+From: Spencer Lien <Spencer.Lien@CorVascular.com>
+Subject: Wyandot — VasoGuard update for ticket 092693
+To: Lisa Clements <LCLements@wyandotmemorial.org>
+Cc: Jillian Yeater <jyeater@wyandotmemorial.org>
+Content-Language: en-US
+X-Unsent: 1
+
+This is a multi-part message in MIME format.
+--------------kQ4tN8vPzWxYbHmRfL3aDcEsG
+Content-Type: text/plain; charset=UTF-8; format=flowed
+Content-Transfer-Encoding: 7bit
+
+Hi Lisa,
+
+Following up on the 04/15/2026 call -- the software update for the V10 GCX
+(SN D0010) is ready and addresses the "84648" waveform-window error you
+saw after the overpressure event on 04/09/2026.
+
+*To install*
+
+    1. Close VasoGuard if it's open.
+    2. Run the updater linked at the bottom of this email.
+    3. Reboot.
+    4. Run a quick test ABI to confirm waveforms render correctly.
+
+If anything looks off after the update, reply to this email or reopen
+ticket #092693 and we'll get on it the same day.
+
+Once you're stable, two quick asks:
+
+- *Cuff stock*  -- it's been a while since your last cuff order. Want me
+  to put together a standing-order quote for the next 12 months?
+
+- *Reference*  -- if the V10 has been working well at Wyandot since the
+  install, would you be open to a 5-minute customer-quote we could
+  feature on corvascular.com? No pressure either way.
+
+Thanks for being patient on this one.
+
+Spencer
+
+Update download: https://corvascular.com/customer-portal/v10-update
+Ticket: https://corvascular.com/admin/support/092693
+
+--------------kQ4tN8vPzWxYbHmRfL3aDcEsG
+Content-Type: text/html; charset=UTF-8
+Content-Transfer-Encoding: 7bit
+
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=UTF-8">
+  </head>
+  <body>
+    Hi Lisa,<br><br>
+    Following up on the 04/15/2026 call &mdash; the software update for
+    the V10 GCX (SN D0010) is ready and addresses the &ldquo;84648&rdquo;
+    waveform-window error you saw after the overpressure event on
+    04/09/2026.<br><br>
+    <strong>To install</strong><br>
+    1. Close VasoGuard if it's open.<br>
+    2. Run the updater linked at the bottom of this email.<br>
+    3. Reboot.<br>
+    4. Run a quick test ABI to confirm waveforms render correctly.<br><br>
+    If anything looks off after the update, reply to this email or reopen
+    ticket #092693 and we'll get on it the same day.<br><br>
+    Once you're stable, two quick asks:<br><br>
+    <strong>&bull; Cuff stock</strong> &mdash; it's been a while since
+    your last cuff order. Want me to put together a standing-order quote
+    for the next 12 months?<br><br>
+    <strong>&bull; Reference</strong> &mdash; if the V10 has been working
+    well at Wyandot since the install, would you be open to a 5-minute
+    customer-quote we could feature on corvascular.com? No pressure
+    either way.<br><br>
+    Thanks for being patient on this one.<br><br>
+    Spencer<br><br>
+    Update download:
+    <a href="https://corvascular.com/customer-portal/v10-update">corvascular.com/customer-portal/v10-update</a><br>
+    Ticket:
+    <a href="https://corvascular.com/admin/support/092693">#092693</a>
+  </body>
+</html>
+
+--------------kQ4tN8vPzWxYbHmRfL3aDcEsG--
