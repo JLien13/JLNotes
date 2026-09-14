@@ -120,9 +120,13 @@ Filename: "{tmp}\windowsdesktop-runtime-win-x64.exe"; Parameters: "/install /qui
 Filename: "{app}\{#MyAppExeName}"; Description: "Launch {#MyAppName} now"; \
   Flags: nowait postinstall skipifsilent
 ; A silent upgrade never shows the Finished page, so relaunch the app it killed
-; ourselves -- tray-only (--minimized), like a boot launch.
+; ourselves -- tray-only (--minimized), like a boot launch. The in-app
+; self-updater passes /RELAUNCHVISIBLE=1 so the panel the user was looking at
+; comes back up instead.
 Filename: "{app}\{#MyAppExeName}"; Parameters: "--minimized"; \
-  Flags: nowait skipifnotsilent; Check: WasAppRunningAtStart
+  Flags: nowait skipifnotsilent; Check: WasAppRunningAtStart and not RelaunchVisible
+Filename: "{app}\{#MyAppExeName}"; \
+  Flags: nowait skipifnotsilent; Check: WasAppRunningAtStart and RelaunchVisible
 
 [UninstallDelete]
 ; Remove the install dir (shipped files are auto-removed; this sweeps any
@@ -157,6 +161,14 @@ var
 function WasAppRunningAtStart(): Boolean;
 begin
   Result := AppWasRunning;
+end;
+
+// [Run] Check function: the in-app self-updater (UpdateService) passes
+// /RELAUNCHVISIBLE=1 so the relaunch opens the panel; anything else gets the
+// tray-only relaunch.
+function RelaunchVisible(): Boolean;
+begin
+  Result := ExpandConstant('{param:RELAUNCHVISIBLE|0}') = '1';
 end;
 
 { ---------- shell icon-cache refresh (taskbar / desktop / Start) ---------- }

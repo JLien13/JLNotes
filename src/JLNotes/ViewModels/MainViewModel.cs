@@ -96,6 +96,21 @@ public partial class MainViewModel : ObservableObject
             ? $"v{v.Major}.{v.Minor}.{v.Build}"
             : "";
 
+    /// <summary>Set by App's quiet update check once a newer release is found
+    /// (e.g. "1.2.7"); null = none known. Drives the header "Update" link.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasUpdate))]
+    [NotifyPropertyChangedFor(nameof(UpdateLinkText))]
+    private string? _updateAvailableVersion;
+
+    /// <summary>Progress / result text while an update run is in flight; null = idle.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(UpdateLinkText))]
+    private string? _updateStatus;
+
+    public bool HasUpdate => UpdateAvailableVersion != null;
+    public string UpdateLinkText => UpdateStatus ?? (UpdateAvailableVersion is { } v ? $"Update to {v}" : "");
+
     public bool ShowDateView => SortByDate;
     public bool ShowProjectView => !SortByDate && GroupByProject;
     public bool ShowPriorityView => !SortByDate && !GroupByProject;

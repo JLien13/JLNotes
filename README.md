@@ -49,6 +49,15 @@ Download `JLNotes-Setup-<version>.exe` from [Releases](../../releases) and run i
 - Create desktop shortcut
 - Run on Windows startup (off by default; can be changed any time in Settings)
 
+### Updates
+
+JL Notes checks GitHub Releases quietly in the background (once an hour at most,
+silently skipped when offline). When a newer version is published, an
+"Update to X.Y.Z" link appears next to the version number in the panel header;
+click it and the app downloads the installer, closes, upgrades in place, and
+reopens. Settings also has a "Check for updates" button for an on-demand check.
+Notes are never touched by an update.
+
 ## Building from Source
 
 Requires [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0).
@@ -72,6 +81,11 @@ source of truth); pass `-Version X.Y.Z` to override, or `-SkipPublish` to reuse
 an existing `publish/` folder.
 
 The installer is output to `installer/Output/JLNotes-Setup-<version>.exe`.
+
+Add `-Release` to also publish a GitHub release (tag `v<version>` with the setup
+`.exe` attached) through the signed-in `gh` CLI. That release is what the in-app
+updater looks for, so a build is not offered to users until it is published
+this way. The target repo comes from `<RepositoryUrl>` in the csproj.
 
 ## License
 

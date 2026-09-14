@@ -11,11 +11,19 @@
 #   pwsh -NoProfile -ExecutionPolicy Bypass -File installer\build.ps1
 #   pwsh -NoProfile -ExecutionPolicy Bypass -File installer\build.ps1 -Version 1.1.0
 #   pwsh -NoProfile -ExecutionPolicy Bypass -File installer\build.ps1 -SkipPublish
+#   pwsh -NoProfile -ExecutionPolicy Bypass -File installer\build.ps1 -Release
+#
+# -Release also publishes a GitHub release (tag v<version>, the setup .exe as
+# its asset) via the signed-in gh CLI. The in-app self-updater (UpdateService)
+# reads "releases/latest" from the same repo, so a cut is not live for users
+# until it has been published this way. Repo comes from <RepositoryUrl> in the
+# csproj, the same single source the app reads.
 
 [CmdletBinding()]
 param(
     [string]$Version = "",
-    [switch]$SkipPublish
+    [switch]$SkipPublish,
+    [switch]$Release
 )
 
 $ErrorActionPreference = "Stop"
@@ -71,4 +79,25 @@ if (Test-Path $Setup) {
     Get-Item $Setup | Format-Table Name, Length, LastWriteTime
 } else {
     Write-Warning "Installer not found at expected path: $Setup"
+}
+
+# Phase 3 (opt-in): publish the GitHub release the in-app updater looks for.
+if ($Release) {
+    if (-not (Test-Path $Setup)) { throw "Nothing to release: $Setup missing." }
+    $gh = Get-Command gh -ErrorAction SilentlyContinue
+    if (-not $gh) { throw "gh CLI not found; cannot publish release" }
+
+    $m = Select-String -Path $Csproj -Pattern '<RepositoryUrl>\s*https://github\.com/([^<\s]+?)(?:\.git)?\s*</RepositoryUrl>' | Select-Object -First 1
+    if (-not $m) { throw "No <RepositoryUrl> in $Csproj; the updater and this publish step share it." }
+    $Repo = $m.Matches[0].Groups[1].Value.TrimEnd('/')
+
+    $tag = "v$Version"
+    Write-Host "==> Publishing GitHub release $tag to $Repo" -ForegroundColor Cyan
+    & gh release create $tag $Setup --repo $Repo --title "JL Notes $Version" --notes "JL Notes $Version" 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "==> Release $tag already exists; uploading asset with --clobber" -ForegroundColor DarkGray
+        & gh release upload $tag $Setup --repo $Repo --clobber
+        if ($LASTEXITCODE -ne 0) { throw "gh release upload failed (exit $LASTEXITCODE)" }
+    }
+    Write-Host "==> Released: https://github.com/$Repo/releases/tag/$tag" -ForegroundColor Green
 }
