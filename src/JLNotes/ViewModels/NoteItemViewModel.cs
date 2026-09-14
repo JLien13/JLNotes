@@ -121,17 +121,22 @@ public partial class NoteItemViewModel : ObservableObject
     [RelayCommand]
     private void ToggleExpand()
     {
-        IsExpanded = !IsExpanded;
-        if (IsExpanded)
-        {
-            EditTitle = _note.Title;
-            var attachDir = _noteService.GetAttachmentsDir(_note);
-            EditDocument = FlowDocumentHelper.BuildDocument(_note.Body, attachDir);
-            EditProject = _note.Project;
-            EditBranch = _note.Branch;
-            EditRepo = _note.Repo;
-            EditTags = string.Join(", ", _note.Tags);
-        }
+        if (IsExpanded) IsExpanded = false;
+        else Expand();
+    }
+
+    /// <summary>Open the inline edit form (list/grid layouts) primed with the
+    /// note's current values. Also how a freshly created note is revealed.</summary>
+    public void Expand()
+    {
+        IsExpanded = true;
+        EditTitle = _note.Title;
+        var attachDir = _noteService.GetAttachmentsDir(_note);
+        EditDocument = FlowDocumentHelper.BuildDocument(_note.Body, attachDir);
+        EditProject = _note.Project;
+        EditBranch = _note.Branch;
+        EditRepo = _note.Repo;
+        EditTags = string.Join(", ", _note.Tags);
     }
 
     [RelayCommand]
