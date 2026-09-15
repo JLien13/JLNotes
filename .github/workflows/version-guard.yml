@@ -1,0 +1,33 @@
+name: Version guard
+
+# When a release tag vX.Y.Z is pushed, the version typed in the code must be the
+# same X.Y.Z, or this fails before anything is built. Catches the forgotten bump
+# that ships an installer whose About box says the previous version.
+#
+# Single source of the app version: <Version> in src/JLNotes/JLNotes.csproj.
+
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
+
+permissions:
+  contents: read
+
+jobs:
+  version-guard:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tag and code must agree
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          code=$(grep -oP '(?<=<Version>)[^<]+' src/JLNotes/JLNotes.csproj | head -1)
+          echo "tag v$tag, csproj <Version>$code</Version>"
+          if [ "$tag" != "$code" ]; then
+            echo "::error::Tag v$tag does not match <Version>$code</Version> in src/JLNotes/JLNotes.csproj. Bump the csproj, then re-tag."
+            exit 1
+          fi
+          echo "Version matches."
