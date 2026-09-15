@@ -1,0 +1,13 @@
+title = "gitleaks config"
+
+# Extend the default gitleaks ruleset. Add CONFIRMED false positives to the
+# allowlist below, one per line, with a comment saying what was verified and why
+# it is not a secret. Never allowlist a real finding to make the gate green.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "confirmed false positives"
+paths = [
+]
