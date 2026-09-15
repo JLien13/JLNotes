@@ -1,0 +1,73 @@
+name: Verify No AI Attribution
+
+# Fails a PR when any commit in it, the PR title or body, or an added line in the
+# diff carries AI attribution: a Claude co-author line, a Claude session link, an
+# Anthropic address, or a "Generated with Claude" footer.
+#
+# The rule is repository policy (CLAUDE.md). This check is the enforcement.
+#
+# Trigger: auto on every PR into main (including title/body edits), or
+# run manually from the Actions tab against a base and head.
+
+on:
+  workflow_dispatch:
+    inputs:
+      base:
+        description: 'Base ref (e.g. main)'
+        required: true
+        type: string
+      head:
+        description: 'Head ref (e.g. feat/short-slug)'
+        required: true
+        type: string
+
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+
+jobs:
+  no-ai-attribution:
+    runs-on: windows-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve range
+        id: range
+        shell: powershell
+        env:
+          IN_BASE: ${{ inputs.base }}
+          IN_HEAD: ${{ inputs.head }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if ($env:IN_BASE) {
+            git fetch origin $env:IN_BASE $env:IN_HEAD | Out-Null
+            $base = "origin/$env:IN_BASE"
+            $head = "origin/$env:IN_HEAD"
+          } else {
+            $base = $env:PR_BASE
+            $head = $env:PR_HEAD
+          }
+          "base=$base" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "head=$head" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          Write-Host "Range: $base..$head"
+
+      - name: Check commits, PR text, and diff
+        shell: powershell
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          .\.github\scripts\Check-NoAiAttribution.ps1 `
+            -BaseSha '${{ steps.range.outputs.base }}' `
+            -HeadSha '${{ steps.range.outputs.head }}' `
+            -PrTitle $env:PR_TITLE `
+            -PrBody $env:PR_BODY
