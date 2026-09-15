@@ -1,0 +1,53 @@
+name: PR Large File Guard
+
+# Fails a PR when it adds or changes a file bigger than the limit below. An
+# installer, a Photoshop source, a video or a database dropped into git by
+# accident bloats every clone forever (git never forgets), so it is caught at
+# the PR, not after the merge.
+#
+# Only files the PR itself adds or modifies are measured, so large files that
+# are already in the repo do not fail unrelated PRs. Git LFS pointers are tiny
+# and pass.
+#
+# Trigger: auto on every PR into main.
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  MAX_MB: 10
+
+jobs:
+  large-files:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Measure files this PR adds or changes
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          limit=$((MAX_MB * 1024 * 1024))
+          hits=0
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            size=$(git cat-file -s "$HEAD:$f" 2>/dev/null || echo 0)
+            if [ "$size" -gt "$limit" ]; then
+              echo "::error file=$f::$f is $((size / 1024 / 1024)) MB (limit $MAX_MB MB)"
+              hits=$((hits + 1))
+            fi
+          done < <(git diff --name-only --diff-filter=AM "$BASE" "$HEAD")
+          if [ "$hits" -gt 0 ]; then
+            echo "$hits file(s) over $MAX_MB MB. Keep build outputs, installers and media out of git (or use Git LFS)."
+            exit 1
+          fi
+          echo "No file over $MAX_MB MB added or changed."
