@@ -20,6 +20,7 @@ internal static class AppPaths
     /// <summary>Markdown notes folder.</summary>
     public static string NotesDir { get; } = Path.Combine(BaseDir, "notes");
 
-    /// <summary>Per-note image attachments folder.</summary>
-    public static string AttachmentsDir { get; } = Path.Combine(BaseDir, "attachments");
+    /// <summary>Attachments root: the <c>attachments</c> folder beside a notes folder.</summary>
+    public static string AttachmentsRootFor(string notesDir) =>
+        Path.Combine(Path.GetDirectoryName(notesDir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))!, "attachments");
 }

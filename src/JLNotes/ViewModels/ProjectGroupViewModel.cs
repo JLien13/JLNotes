@@ -1,11 +1,15 @@
 using System.Collections.ObjectModel;
 using System.Windows.Media;
+using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace JLNotes.ViewModels;
 
-public class ProjectGroupViewModel
+public partial class ProjectGroupViewModel : ObservableObject
 {
     public string Name { get; set; } = "";
-    public Brush ColorBrush { get; set; } = Brushes.Gray;
+
+    [ObservableProperty]
+    private Brush _colorBrush = Brushes.Gray;
+
     public ObservableCollection<NoteItemViewModel> Notes { get; } = [];
 }

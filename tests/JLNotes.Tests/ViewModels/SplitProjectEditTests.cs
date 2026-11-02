@@ -6,7 +6,7 @@ using JLNotes.ViewModels;
 namespace JLNotes.Tests.ViewModels;
 
 // Project edited in the split detail pane rides EditProject (shared with the
-// list card) and CommitSplitEdit (shared with title/body/tags).
+// list card) and SaveEditor (shared with title/body/tags).
 public class SplitProjectEditTests : IDisposable
 {
     private readonly string _testDir;
@@ -35,17 +35,24 @@ public class SplitProjectEditTests : IDisposable
     {
         var note = new Note { Title = "T", Body = "b", Project = project, Created = new DateTime(2026, 9, 14) };
         _noteService.Save(note);
-        return new NoteItemViewModel(note, _noteService, _settingsService, _projectService);
+        return new NoteItemViewModel(note, _noteService, _settingsService, new ProjectCatalog());
+    }
+
+    private MainViewModel SplitView()
+    {
+        var vm = new MainViewModel(_noteService, _projectService, _settingsService);
+        vm.ViewMode = "split";
+        return vm;
     }
 
     [Fact]
     public void Commit_AfterProjectEdit_PersistsToDisk()
     {
         var vm = SavedVm("");
-        vm.BeginSplitEdit();
+        vm.LoadEditor();
 
         vm.EditProject = "A1i";
-        vm.CommitSplitEdit();
+        vm.SaveEditor();
 
         Assert.Equal("A1i", vm.Note.Project);
         var reloaded = Note.ParseFromMarkdown(File.ReadAllText(vm.Note.FilePath), vm.Note.FilePath);
@@ -56,27 +63,46 @@ public class SplitProjectEditTests : IDisposable
     public void SplitProjectChoice_MapsNoProjectToBlank_AndSavesImmediately()
     {
         var vm = SavedVm("CorVascular");
-        vm.BeginSplitEdit();
+        vm.LoadEditor();
         Assert.Equal("CorVascular", vm.SplitProjectChoice);
 
-        vm.SplitProjectChoice = NoteItemViewModel.NoProject;
+        vm.SplitProjectChoice = ProjectCatalog.NoProject;
 
         Assert.Equal("", vm.Note.Project);
-        Assert.Equal(NoteItemViewModel.NoProject, vm.SplitProjectChoice);
+        Assert.Equal(ProjectCatalog.NoProject, vm.SplitProjectChoice);
         var reloaded = Note.ParseFromMarkdown(File.ReadAllText(vm.Note.FilePath), vm.Note.FilePath);
         Assert.Equal("", reloaded.Project);
     }
 
     [Fact]
-    public void ProjectChoices_StartWithNoProject_AndIncludeAnUnregisteredCurrentProject()
+    public void Picker_ShowsTheSameProjectsAsTheHeader()
     {
-        var vm = SavedVm("Skunkworks");
+        SavedVm("Skunkworks");
+        var vm = SplitView();
 
-        var choices = vm.ProjectChoices;
+        Assert.Equal(["A1i", "CorVascular", "Skunkworks"], vm.Projects.Skip(1));
+        Assert.Equal(ProjectCatalog.NoProject, vm.SelectedSplitNote!.ProjectChoices[0]);
+        Assert.Equal(vm.Projects.Skip(1), vm.SelectedSplitNote.ProjectChoices.Skip(1));
+    }
 
-        Assert.Equal(NoteItemViewModel.NoProject, choices[0]);
-        Assert.Contains("CorVascular", choices);
-        Assert.Contains("A1i", choices);
-        Assert.Contains("Skunkworks", choices);
+    [Fact]
+    public void ProjectNames_DifferingOnlyByCase_AreOneProject()
+    {
+        SavedVm("VG-Fleet");
+        SavedVm("vg-fleet");
+        var vm = SplitView();
+
+        Assert.Single(vm.Projects, p => ProjectCatalog.Same(p, "vg-fleet"));
+
+        vm.SelectedProject = "VG-Fleet";
+        Assert.Equal(2, vm.SplitNotes.Count);
+
+        // A note spelled the other way still shows as selected in the picker, and
+        // merely showing it does not rewrite its file.
+        var lowerCase = vm.SplitNotes.Single(n => n.Project == "vg-fleet");
+        lowerCase.LoadEditor();
+        Assert.Equal("VG-Fleet", lowerCase.SplitProjectChoice);
+        lowerCase.SplitProjectChoice = "VG-Fleet";
+        Assert.Equal("vg-fleet", lowerCase.Note.Project);
     }
 }

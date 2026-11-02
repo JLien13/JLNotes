@@ -239,6 +239,10 @@
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
+                        <!-- Selection checkbox (select mode only) -->
+                        <CheckBox Grid.Column="0" Style="{StaticResource DarkCheckBox}"
+                                  IsChecked="{Binding IsSelected}"
+                                  Visibility="{Binding IsSelectMode, Converter={StaticResource BoolToVisibility}}" />
                         <TextBlock Grid.Column="1" Text="{Binding Title}"
                                    Style="{StaticResource BaseText}"
                                    TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
@@ -252,7 +256,7 @@
             <!-- Split view: right detail pane. Always editable in place — the
                  title and body read exactly like the rendered note but edit
                  directly (no Edit button, no mode switch). Edits auto-commit on
-                 note switch / blur / close via MainViewModel.CommitSplitEdit.
+                 note switch / blur / close via MainViewModel.SaveSplitEditor.
                  DataContext = the selected NoteItemViewModel. -->
             <DataTemplate x:Key="NoteDetailTemplate">
                 <Grid Margin="16,14">
@@ -297,7 +301,7 @@
                         </StackPanel>
                         <!-- Tags: chips + "+ tag" while reading; click either to swap in a
                              comma-separated editor (same EditTags / ParseTags the list card
-                             uses). Enter or focus loss commits via CommitSplitEdit; Esc reverts. -->
+                             uses). Enter or focus loss commits via SaveEditor; Esc reverts. -->
                         <Grid Margin="0,8,0,0">
                             <WrapPanel Visibility="{Binding IsEditingTags, Converter={StaticResource InverseBoolToVisibility}}">
                                 <ItemsControl ItemsSource="{Binding Tags}">

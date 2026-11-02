@@ -6,7 +6,7 @@ namespace JLNotes.Services;
 public class NoteService : IDisposable
 {
     private readonly string _notesDir;
-    private readonly string _attachmentsBaseDir;
+    private readonly string _attachmentsRoot;
     private FileSystemWatcher? _watcher;
 
     // Paths this process just wrote, with the time of the write. The watcher
@@ -23,7 +23,7 @@ public class NoteService : IDisposable
         _notesDir = notesDir;
         if (!Directory.Exists(_notesDir))
             Directory.CreateDirectory(_notesDir);
-        _attachmentsBaseDir = Path.Combine(Path.GetDirectoryName(_notesDir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))!, "attachments");
+        _attachmentsRoot = AppPaths.AttachmentsRootFor(_notesDir);
     }
 
     /// <summary>File names the last LoadAll could not read. Bad headers load fine,
@@ -55,17 +55,7 @@ public class NoteService : IDisposable
     /// <param name="stampUpdated">False when nothing the user wrote changed, such as a new sort position.</param>
     public void Save(Note note, bool stampUpdated = true)
     {
-        var oldSlug = "";
-        if (!string.IsNullOrEmpty(note.FilePath) && File.Exists(note.FilePath))
-        {
-            // Capture old slug before potential rename
-            var oldFileName = Path.GetFileNameWithoutExtension(note.FilePath);
-            if (oldFileName.Length > 11 && oldFileName[4] == '-' && oldFileName[7] == '-' && oldFileName[10] == '-')
-                oldSlug = oldFileName.Substring(11);
-            else
-                oldSlug = oldFileName;
-        }
-
+        string? previousBody = null;
         if (string.IsNullOrEmpty(note.FilePath) || !File.Exists(note.FilePath))
         {
             // Never reuse another note's file: same title on the same day (or two
@@ -78,6 +68,11 @@ public class NoteService : IDisposable
                 candidate = Path.Combine(_notesDir, $"{stem}-{n}{ext}");
             note.FilePath = candidate;
         }
+        else
+        {
+            previousBody = Note.ParseFromMarkdown(File.ReadAllText(note.FilePath), note.FilePath).Body;
+        }
+
         if (stampUpdated)
             note.Updated = DateTime.Now;
         // Record before writing: the watcher fires asynchronously and may beat
@@ -85,17 +80,11 @@ public class NoteService : IDisposable
         RecordSelfWrite(note.FilePath);
         File.WriteAllText(note.FilePath, note.ToMarkdown());
 
-        // Rename attachments folder if slug changed
-        var newSlug = note.GetSlug();
-        if (!string.IsNullOrEmpty(oldSlug) && oldSlug != newSlug)
-        {
-            var oldDir = Path.Combine(_attachmentsBaseDir, oldSlug);
-            var newDir = Path.Combine(_attachmentsBaseDir, newSlug);
-            if (Directory.Exists(oldDir) && !Directory.Exists(newDir))
-                Directory.Move(oldDir, newDir);
-        }
-
-        CleanupOrphanedAttachments(note);
+        // A save that leaves the body alone (priority, status, sort order) cannot
+        // change what the note references. Without this check an image still waiting
+        // for its token to reach the body would be deleted.
+        if (previousBody != note.Body.Trim())
+            DeleteUnreferencedAttachments(note);
     }
 
     public void Delete(Note note)
@@ -108,10 +97,65 @@ public class NoteService : IDisposable
             Directory.Delete(attachDir, true);
     }
 
-    public string GetAttachmentsDir(Note note)
+    /// <summary>The one answer to where a note's attachments live: a folder named
+    /// after its full file name, date included, which no other note can share.</summary>
+    public string GetAttachmentsDir(Note note) =>
+        Path.Combine(_attachmentsRoot, Path.GetFileNameWithoutExtension(note.FilePath));
+
+    /// <summary>
+    /// Attachment folders used to be named without the date, so notes with the same
+    /// title shared one. This moves each note's files into its own folder, copying a
+    /// file that two notes both use. Files no note references stay where they are, and
+    /// a folder no note claims is someone's own and is left alone. Safe to run on every
+    /// start: it does nothing once the old folders are gone, and a run that fails
+    /// partway finishes on the next start.
+    /// </summary>
+    public void MigrateAttachmentFolders()
     {
-        return Path.Combine(_attachmentsBaseDir, note.GetSlug());
+        if (!Directory.Exists(_attachmentsRoot)) return;
+
+        var notes = LoadAll();
+        foreach (var oldDir in Directory.GetDirectories(_attachmentsRoot))
+        {
+            try
+            {
+                MigrateAttachmentFolder(oldDir, notes);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                // Something has a file open. The originals are untouched until every
+                // copy has landed, so the next start picks this folder up again.
+            }
+        }
     }
+
+    private void MigrateAttachmentFolder(string oldDir, List<Note> notes)
+    {
+        var folderName = Path.GetFileName(oldDir);
+        var isSomeNotesCurrentFolder = notes.Any(n => FolderNameMatches(GetAttachmentsDir(n), folderName));
+        var copied = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var owner in notes.Where(n => n.GetSlug().Equals(folderName, StringComparison.OrdinalIgnoreCase)
+                                               && !FolderNameMatches(GetAttachmentsDir(n), folderName)))
+        {
+            var newDir = GetAttachmentsDir(owner);
+            foreach (var token in owner.GetAttachmentTokens().Where(t => Helpers.FlowDocumentHelper.IsAttachment(t, oldDir)))
+            {
+                Directory.CreateDirectory(newDir);
+                File.Copy(Path.Combine(oldDir, token), Path.Combine(newDir, token), overwrite: true);
+                copied.Add(token);
+            }
+        }
+
+        if (isSomeNotesCurrentFolder) return;
+        foreach (var token in copied)
+            File.Delete(Path.Combine(oldDir, token));
+        if (copied.Count > 0 && !Directory.EnumerateFileSystemEntries(oldDir).Any())
+            Directory.Delete(oldDir);
+    }
+
+    private static bool FolderNameMatches(string dir, string folderName) =>
+        Path.GetFileName(dir).Equals(folderName, StringComparison.OrdinalIgnoreCase);
 
     public string AddAttachment(Note note, string sourceFilePath)
     {
@@ -160,20 +204,19 @@ public class NoteService : IDisposable
         return fileName;
     }
 
-    public void CleanupOrphanedAttachments(Note note)
+    private void DeleteUnreferencedAttachments(Note note)
     {
         var dir = GetAttachmentsDir(note);
         if (!Directory.Exists(dir)) return;
 
-        var validFiles = new HashSet<string>(note.Attachments, StringComparer.OrdinalIgnoreCase);
+        var referenced = new HashSet<string>(note.GetAttachmentTokens(), StringComparer.OrdinalIgnoreCase);
         foreach (var file in Directory.GetFiles(dir))
         {
-            if (!validFiles.Contains(Path.GetFileName(file)))
+            if (!referenced.Contains(Path.GetFileName(file)))
                 File.Delete(file);
         }
 
-        // Remove empty directory
-        if (Directory.Exists(dir) && !Directory.EnumerateFileSystemEntries(dir).Any())
+        if (!Directory.EnumerateFileSystemEntries(dir).Any())
             Directory.Delete(dir);
     }
 

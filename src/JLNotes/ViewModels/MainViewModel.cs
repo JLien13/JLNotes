@@ -3,6 +3,7 @@ using System.Windows.Media;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using JLNotes.Helpers;
 using JLNotes.Models;
 using JLNotes.Services;
 
@@ -13,12 +14,18 @@ public partial class MainViewModel : ObservableObject
     private readonly NoteService _noteService;
     private readonly ProjectService _projectService;
     private readonly SettingsService _settingsService;
+    private readonly ProjectCatalog _projects = new();
     private DispatcherTimer? _searchDebounce;
-    private List<Note> _cachedNotes = [];
-    private List<ProjectInfo> _cachedProjects = [];
+
+    // The one list of notes: one view model per note, for as long as its file
+    // exists. The collections below are filtered and sorted windows onto it.
+    private List<NoteItemViewModel> _items = [];
+
+    // Which note the split pane comes back to after a visit to another layout.
+    private string? _splitSelectionPath;
 
     [ObservableProperty]
-    private string _selectedProject = "Projects";
+    private string _selectedProject = ProjectCatalog.AllProjects;
 
     [ObservableProperty]
     private string _statusFilter = "all";
@@ -70,7 +77,7 @@ public partial class MainViewModel : ObservableObject
     public ObservableCollection<ProjectGroupViewModel> ProjectGroups { get; } = [];
     // Flat, filtered note list backing the split view's left rail (virtualized).
     public ObservableCollection<NoteItemViewModel> SplitNotes { get; } = [];
-    public ObservableCollection<string> Projects { get; } = ["Projects"];
+    public ObservableCollection<string> Projects => _projects.FilterChoices;
 
     // Header View dropdown.
     public string[] ViewModes { get; } = ["List", "Grid", "Split"];
@@ -135,7 +142,7 @@ public partial class MainViewModel : ObservableObject
     public bool IsEmpty => _filteredCount == 0;
     public string EmptyMessage =>
         HasSearchText ? $"No notes match “{SearchText}”"
-        : _cachedNotes.Count == 0 ? "No notes yet — hit + to add one"
+        : _items.Count == 0 ? "No notes yet. Hit + to add one."
         : "Nothing here — try toggling filters";
 
     /// <summary>Shown under the search bar when a note file could not be read at
@@ -154,14 +161,16 @@ public partial class MainViewModel : ObservableObject
     public ProjectService ProjectService => _projectService;
     public SettingsService SettingsService => _settingsService;
 
-    private IEnumerable<NoteItemViewModel> AllNoteViewModels =>
-        SortByDate
-            ? SortedByDate
-            : GroupByProject
-                ? ProjectGroups.SelectMany(pg => pg.Notes)
-                : HighPriority.Concat(MediumPriority).Concat(LowPriority);
+    private IEnumerable<NoteItemViewModel> OnScreen =>
+        IsSplitLayout
+            ? SplitNotes
+            : SortByDate
+                ? SortedByDate
+                : GroupByProject
+                    ? ProjectGroups.SelectMany(pg => pg.Notes)
+                    : HighPriority.Concat(MediumPriority).Concat(LowPriority);
 
-    public int SelectedCount => AllNoteViewModels.Count(vm => vm.IsSelected);
+    public int SelectedCount => OnScreen.Count(vm => vm.IsSelected);
 
     public MainViewModel(NoteService noteService, ProjectService projectService, SettingsService settingsService)
     {
@@ -196,188 +205,127 @@ public partial class MainViewModel : ObservableObject
         _searchDebounce.Tick += (_, _) =>
         {
             _searchDebounce.Stop();
-            RefreshFromCache();
+            UpdateWindows();
         };
     }
 
-    private void LoadProjects(IEnumerable<Note>? notes = null)
-    {
-        var known = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Projects" };
-
-        // From projects.json (cached)
-        foreach (var p in _cachedProjects)
-            known.Add(p.Name);
-
-        // From note frontmatter
-        if (notes != null)
-            foreach (var n in notes)
-                if (!string.IsNullOrWhiteSpace(n.Project))
-                    known.Add(n.Project);
-
-        // Sync the collection (keep "Projects" first), but only if changed
-        var sorted = known.Where(k => k != "Projects").OrderBy(k => k).ToList();
-        var desired = new List<string> { "Projects" };
-        desired.AddRange(sorted);
-
-        if (Projects.SequenceEqual(desired, StringComparer.OrdinalIgnoreCase))
-            return;
-
-        Projects.Clear();
-        Projects.Add("Projects");
-        foreach (var name in sorted)
-            Projects.Add(name);
-    }
-
+    /// <summary>Reads the notes folder again and brings the one list up to date.
+    /// A note that is still there keeps its view model, so its row, selection and
+    /// open editor all survive.</summary>
     public void RefreshNotes()
     {
-        _cachedNotes = _noteService.LoadAll();
-        _cachedProjects = _projectService.Load();
-        LoadProjects(_cachedNotes);
+        var notes = _noteService.LoadAll();
+        _projects.Refresh(_projectService.Load(), notes, SelectedProject);
+        var subtitleDisplay = _settingsService.Load().SubtitleDisplay;
+
+        var previous = _items.ToDictionary(vm => vm.Note.FilePath, StringComparer.OrdinalIgnoreCase);
+        _items = notes.Select(note =>
+        {
+            if (!previous.Remove(note.FilePath, out var vm))
+                return CreateItem(note);
+            vm.Reload(note);
+            return vm;
+        }).ToList();
+        foreach (var vm in _items)
+            vm.SubtitleDisplay = subtitleDisplay;
+
+        // Their files are gone, and saving their editors would bring them back.
+        foreach (var gone in previous.Values)
+            gone.CancelEditsCommand.Execute(null);
+
         OnPropertyChanged(nameof(UnreadableNotesMessage));
         OnPropertyChanged(nameof(UnreadableNotesDetail));
-        RefreshFromCache();
+        UpdateWindows();
+    }
+
+    private NoteItemViewModel CreateItem(Note note)
+    {
+        var vm = new NoteItemViewModel(note, _noteService, _settingsService, _projects) { IsSelectMode = IsSelectMode };
+        vm.NoteChanged += RefreshNotes;
+        vm.NoteDeleted += RefreshNotes;
+        vm.DropReceived += HandleReorder;
+        vm.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(NoteItemViewModel.IsSelected))
+                OnPropertyChanged(nameof(SelectedCount));
+        };
+        return vm;
     }
 
     /// <summary>Tag chip click: require this tag in the search (see NoteSearch).</summary>
     public void AddTagToSearch(string tag) => SearchText = Helpers.NoteSearch.AddTag(SearchText, tag);
 
-    private void RefreshFromCache()
+    private void UpdateWindows()
     {
         var query = Helpers.NoteSearch.Parse(SearchText);
-        var filtered = _cachedNotes.Where(n =>
-            (SelectedProject == "Projects" || n.Project == SelectedProject) &&
+        var filtered = _items.Where(vm =>
+            ProjectCatalog.PassesFilter(vm.Project, SelectedProject) &&
             StatusFilter switch
             {
-                "open" => n.Status != NoteStatus.Done,
-                "done" => n.Status == NoteStatus.Done,
+                "open" => vm.Note.Status != NoteStatus.Done,
+                "done" => vm.Note.Status == NoteStatus.Done,
                 _ => true
             } &&
-            Helpers.NoteSearch.Matches(n, query)
+            Helpers.NoteSearch.Matches(vm.Note, query)
         ).ToList();
 
-        RebuildGroup(HighPriority, filtered.Where(n => n.Priority == NotePriority.High));
-        RebuildGroup(MediumPriority, filtered.Where(n => n.Priority == NotePriority.Medium));
-        RebuildGroup(LowPriority, filtered.Where(n => n.Priority == NotePriority.Low));
-        RebuildGroup(SortedByDate, filtered.OrderByDescending(n => n.Created));
-        RebuildProjectGroups(filtered);
-        RebuildSplit(filtered);
+        var byDate = filtered.OrderByDescending(vm => vm.Created).ToList();
+        SyncWindow(SortedByDate, byDate);
+        SyncWindow(HighPriority, filtered.Where(vm => vm.Priority == NotePriority.High).ToList());
+        SyncWindow(MediumPriority, filtered.Where(vm => vm.Priority == NotePriority.Medium).ToList());
+        SyncWindow(LowPriority, filtered.Where(vm => vm.Priority == NotePriority.Low).ToList());
+        SyncProjectGroups(GroupByProject ? filtered : []);
+        SyncWindow(SplitNotes, SortByDate
+            ? byDate
+            : filtered.OrderByDescending(vm => vm.Priority).ThenBy(vm => vm.Note.SortOrder).ThenByDescending(vm => vm.Created).ToList());
+
+        // The detail pane is bound to this note even while hidden, so it must let go
+        // outside split view or a list card opening the same note would need the
+        // same document. In split, keep the selected note if it is still listed,
+        // otherwise fall back to the first so the pane is never blank.
+        SelectedSplitNote = !IsSplitLayout
+            ? null
+            : SplitNotes.FirstOrDefault(vm => vm.Note.FilePath == _splitSelectionPath) ?? SplitNotes.FirstOrDefault();
 
         _filteredCount = filtered.Count;
         OnPropertyChanged(nameof(IsEmpty));
         OnPropertyChanged(nameof(EmptyMessage));
+        OnPropertyChanged(nameof(SelectedCount));
     }
 
-    private void RebuildProjectGroups(List<Note> filtered)
+    // A list card's editor lives in its row and cannot follow the note to another
+    // one, so a note leaving a window saves and closes its card first.
+    private static void SyncWindow(ObservableCollection<NoteItemViewModel> window, List<NoteItemViewModel> wanted)
     {
-        ProjectGroups.Clear();
-        if (!GroupByProject) return;
-
-        var projectInfos = _cachedProjects;
-
-        // Group notes by project name
-        var groups = filtered
-            .GroupBy(n => string.IsNullOrWhiteSpace(n.Project) ? "(No Project)" : n.Project,
-                     StringComparer.OrdinalIgnoreCase)
-            .OrderBy(g => g.Key);
-
-        foreach (var g in groups)
-        {
-            var info = projectInfos.FirstOrDefault(
-                p => p.Name.Equals(g.Key, StringComparison.OrdinalIgnoreCase));
-
-            Brush colorBrush = Brushes.Gray;
-            if (info != null && !string.IsNullOrEmpty(info.Color))
-            {
-                try
-                {
-                    var color = (Color)ColorConverter.ConvertFromString(info.Color);
-                    colorBrush = new SolidColorBrush(color);
-                }
-                catch { }
-            }
-
-            var pg = new ProjectGroupViewModel
-            {
-                Name = g.Key,
-                ColorBrush = colorBrush
-            };
-
-            foreach (var note in g)
-            {
-                var vm = new NoteItemViewModel(note, _noteService, _settingsService, _projectService);
-                vm.NoteChanged += () => RefreshNotes();
-                vm.NoteDeleted += () => RefreshNotes();
-                vm.DropReceived += HandleReorder;
-                vm.IsSelectMode = IsSelectMode;
-                vm.PropertyChanged += (s, e) =>
-                {
-                    if (e.PropertyName == nameof(NoteItemViewModel.IsSelected))
-                        OnPropertyChanged(nameof(SelectedCount));
-                };
-                pg.Notes.Add(vm);
-            }
-
-            ProjectGroups.Add(pg);
-        }
+        foreach (var leaving in window.Except(wanted))
+            if (leaving.IsExpanded) leaving.CloseEditor();
+        window.SyncTo(wanted);
     }
 
-    private void RebuildGroup(ObservableCollection<NoteItemViewModel> group, IEnumerable<Note> notes)
+    // Changing view brings up different rows, and an open card cannot move to them.
+    private void CloseCards()
     {
-        group.Clear();
-        foreach (var note in notes)
-        {
-            var vm = new NoteItemViewModel(note, _noteService, _settingsService, _projectService);
-            vm.NoteChanged += () => RefreshNotes();
-            vm.NoteDeleted += () => RefreshNotes();
-            vm.DropReceived += HandleReorder;
-            vm.IsSelectMode = IsSelectMode;
-            vm.PropertyChanged += (s, e) =>
-            {
-                if (e.PropertyName == nameof(NoteItemViewModel.IsSelected))
-                    OnPropertyChanged(nameof(SelectedCount));
-            };
-            group.Add(vm);
-        }
+        foreach (var vm in _items)
+            if (vm.IsExpanded) vm.CloseEditor();
     }
 
-    private void RebuildSplit(List<Note> filtered)
+    private void SyncProjectGroups(List<NoteItemViewModel> notes)
     {
-        // Flush any in-place detail edits before we swap out the VM instances,
-        // so a background refresh (file watcher, filter/search change) never
-        // drops unsaved work. No-ops when nothing changed.
-        SelectedSplitNote?.CommitSplitEdit();
+        var groups = notes
+            .GroupBy(vm => _projects.DisplayName(vm.Project))
+            .OrderBy(g => g.Key, ProjectCatalog.Comparer)
+            .Select(g =>
+            {
+                var group = ProjectGroups.FirstOrDefault(pg => pg.Name == g.Key) ?? new ProjectGroupViewModel { Name = g.Key };
+                group.ColorBrush = _projects.BrushOf(g.Key) ?? Brushes.Gray;
+                SyncWindow(group.Notes, g.ToList());
+                return group;
+            })
+            .ToList();
 
-        var ordered = SortByDate
-            ? filtered.OrderByDescending(n => n.Created)
-            : filtered
-                .OrderBy(n => n.Priority switch
-                {
-                    NotePriority.High => 0,
-                    NotePriority.Medium => 1,
-                    NotePriority.Low => 2,
-                    _ => 3
-                })
-                .ThenBy(n => n.SortOrder)
-                .ThenByDescending(n => n.Created);
-
-        var previousPath = SelectedSplitNote?.Note.FilePath;
-
-        SplitNotes.Clear();
-        foreach (var note in ordered)
-        {
-            var vm = new NoteItemViewModel(note, _noteService, _settingsService, _projectService);
-            vm.NoteChanged += () => RefreshNotes();
-            vm.NoteDeleted += () => RefreshNotes();
-            SplitNotes.Add(vm);
-        }
-
-        // Preserve the prior selection across the rebuild; otherwise default to the
-        // first note so the detail pane is never blank when notes exist.
-        SelectedSplitNote =
-            (previousPath != null
-                ? SplitNotes.FirstOrDefault(v => v.Note.FilePath == previousPath)
-                : null)
-            ?? SplitNotes.FirstOrDefault();
+        foreach (var gone in ProjectGroups.Except(groups))
+            SyncWindow(gone.Notes, []);
+        ProjectGroups.SyncTo(groups);
     }
 
     private void HandleReorder(NoteItemViewModel source, NoteItemViewModel target)
@@ -397,10 +345,10 @@ public partial class MainViewModel : ObservableObject
         // date alone: moving a note in a list is not editing it.
         for (int i = 0; i < group.Count; i++)
         {
-            if (group[i].Note.SortOrder == i) continue;
-            group[i].Note.SortOrder = i;
-            _noteService.Save(group[i].Note, stampUpdated: false);
+            if (group[i].Note.SortOrder != i)
+                group[i].SetSortOrder(i);
         }
+        RefreshNotes();
     }
 
     private ObservableCollection<NoteItemViewModel>? GetGroupForPriority(NotePriority priority) => priority switch
@@ -413,17 +361,21 @@ public partial class MainViewModel : ObservableObject
 
     public void CollapseAll()
     {
-        foreach (var vm in AllNoteViewModels)
+        foreach (var vm in OnScreen.ToList())
             if (vm.IsExpanded) vm.CancelEditsCommand.Execute(null);
     }
 
-    public void SaveExpanded()
+    /// <summary>Ctrl+S, in every layout.</summary>
+    public void SaveOpenEditors()
     {
-        foreach (var vm in AllNoteViewModels)
+        SaveSplitEditor();
+        foreach (var vm in OnScreen.ToList())
             if (vm.IsExpanded) vm.SaveEditsCommand.Execute(null);
     }
 
-    partial void OnSelectedProjectChanged(string value) => RefreshNotes();
+    // Not a full refresh: that could drop the old project from the list while the
+    // header dropdown still has it selected, and the dropdown would answer with null.
+    partial void OnSelectedProjectChanged(string value) => UpdateWindows();
     partial void OnStatusFilterChanged(string value)
     {
         var settings = _settingsService.Load();
@@ -458,6 +410,7 @@ public partial class MainViewModel : ObservableObject
     private void ClearSearch() => SearchText = "";
     partial void OnGroupByProjectChanged(bool value)
     {
+        CloseCards();
         var settings = _settingsService.Load();
         settings.GroupByProject = value;
         _settingsService.Save(settings);
@@ -467,6 +420,7 @@ public partial class MainViewModel : ObservableObject
     }
     partial void OnSortByDateChanged(bool value)
     {
+        CloseCards();
         var settings = _settingsService.Load();
         settings.SortByDate = value;
         _settingsService.Save(settings);
@@ -478,15 +432,7 @@ public partial class MainViewModel : ObservableObject
 
     partial void OnViewModeChanged(string? oldValue, string newValue)
     {
-        // Leaving split: flush the in-place detail editor, then rebuild the other
-        // views from the (now-current) in-memory cache so they reflect the edit.
-        // This is off the hot path — a deliberate layout switch, not note clicks —
-        // and avoids a disk reload since the save no longer trips the watcher.
-        if (oldValue == "split")
-        {
-            SelectedSplitNote?.CommitSplitEdit();
-            RefreshFromCache();
-        }
+        CloseCards();
 
         var settings = _settingsService.Load();
         settings.ViewMode = newValue;
@@ -496,27 +442,22 @@ public partial class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(IsSplitLayout));
         OnPropertyChanged(nameof(SelectedViewMode));
 
-        // Entering split: ensure a note is selected and primed for editing.
-        if (newValue == "split")
-        {
-            if (SelectedSplitNote == null)
-                SelectedSplitNote = SplitNotes.FirstOrDefault(); // OnSelectedSplitNoteChanged primes it
-            else
-                SelectedSplitNote.BeginSplitEdit();
-        }
+        UpdateWindows();
     }
 
-    // Split detail pane is always editable: commit the note we're leaving and
-    // prime the one we're entering so its title/body load into the editor.
+    // The split detail pane is always editable: save the note being left, and load
+    // the one being entered.
     partial void OnSelectedSplitNoteChanged(NoteItemViewModel? oldValue, NoteItemViewModel? newValue)
     {
-        oldValue?.CommitSplitEdit();
-        newValue?.BeginSplitEdit();
+        oldValue?.CloseEditor();
+        newValue?.LoadEditor();
+        if (newValue != null)
+            _splitSelectionPath = newValue.Note.FilePath;
     }
 
-    /// <summary>Flush the split detail pane's in-place edits to disk. Safe to
-    /// call anytime — no-ops when nothing changed. Used by window blur/close.</summary>
-    public void CommitSplitEdit() => SelectedSplitNote?.CommitSplitEdit();
+    /// <summary>Flush the split detail pane to disk. Safe to call anytime; it does
+    /// nothing when nothing changed. Used by Ctrl+S, window blur, close and exit.</summary>
+    public void SaveSplitEditor() => SelectedSplitNote?.SaveEditor();
 
     /// <summary>Title a brand-new note gets until the user types one (Standard
     /// Notes convention). It doubles as the file-name slug, so it must never be
@@ -536,7 +477,7 @@ public partial class MainViewModel : ObservableObject
         var note = new Note
         {
             Title = DefaultNewNoteTitle(DateTime.Now),
-            Project = SelectedProject == "Projects" ? "" : SelectedProject,
+            Project = SelectedProject == ProjectCatalog.AllProjects ? "" : SelectedProject,
         };
         _noteService.Save(note);
 
@@ -544,42 +485,32 @@ public partial class MainViewModel : ObservableObject
         if (!string.IsNullOrEmpty(SearchText))
         {
             SearchText = "";
-            // The setter arms the debounce; a rebuild 250 ms from now would swap the
-            // VM instances and drop the expanded/selected state set below.
-            _searchDebounce?.Stop();
+            _searchDebounce?.Stop(); // the refresh below covers it
         }
         RefreshNotes();
 
-        var item = AllNoteViewModels.Concat(SplitNotes).First(v => v.Note.FilePath == note.FilePath);
+        var item = _items.First(v => v.Note.FilePath == note.FilePath);
         if (IsSplitLayout)
-        {
-            SelectedSplitNote = SplitNotes.First(v => v.Note.FilePath == note.FilePath);
-            return SelectedSplitNote;
-        }
-        item.Expand();
+            SelectedSplitNote = item;
+        else
+            item.Expand();
         return item;
     }
 
     partial void OnIsSelectModeChanged(bool value)
     {
-        foreach (var vm in HighPriority.Concat(MediumPriority).Concat(LowPriority).Concat(SortedByDate))
+        foreach (var vm in _items)
         {
             vm.IsSelectMode = value;
             if (!value) vm.IsSelected = false;
         }
-        foreach (var pg in ProjectGroups)
-            foreach (var vm in pg.Notes)
-            {
-                vm.IsSelectMode = value;
-                if (!value) vm.IsSelected = false;
-            }
         OnPropertyChanged(nameof(SelectedCount));
     }
 
     [RelayCommand]
     private void ExportSelected()
     {
-        var selected = AllNoteViewModels.Where(vm => vm.IsSelected).Select(vm => vm.Note).ToList();
+        var selected = OnScreen.Where(vm => vm.IsSelected).Select(vm => vm.Note).ToList();
         if (selected.Count == 0) return;
 
         var dialog = new Microsoft.Win32.SaveFileDialog

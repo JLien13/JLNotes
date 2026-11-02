@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Media;
@@ -61,16 +62,22 @@ public class ThemeColorTests
     }
 
     [Fact]
-    public void MissingAttachmentLink_UsesThemeAccentBrush()
+    public void AttachmentLink_UsesThemeAccentBrush()
     {
         Sta(() =>
         {
-            var doc = FlowDocumentHelper.BuildDocument("file {{report.pdf}} here", AttachDir);
-            HostWithTheme(doc, Colors.Red, Colors.Green, Colors.Blue);
-            var link = doc.Blocks.OfType<Paragraph>()
-                .SelectMany(p => p.Inlines.OfType<InlineUIContainer>())
-                .Select(c => c.Child).OfType<TextBlock>().Single();
-            Assert.Equal(Colors.Green, ColorOf(link.Foreground));
+            var dir = Directory.CreateTempSubdirectory("jlnotes-theme").FullName;
+            File.WriteAllText(Path.Combine(dir, "report.pdf"), "x");
+            try
+            {
+                var doc = FlowDocumentHelper.BuildDocument("file {{report.pdf}} here", dir);
+                HostWithTheme(doc, Colors.Red, Colors.Green, Colors.Blue);
+                var link = doc.Blocks.OfType<Paragraph>()
+                    .SelectMany(p => p.Inlines.OfType<InlineUIContainer>())
+                    .Select(c => c.Child).OfType<TextBlock>().Single();
+                Assert.Equal(Colors.Green, ColorOf(link.Foreground));
+            }
+            finally { Directory.Delete(dir, true); }
         });
     }
 }

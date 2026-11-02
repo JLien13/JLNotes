@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.Windows.Documents;
 using System.Windows.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -10,35 +11,36 @@ namespace JLNotes.ViewModels;
 
 public partial class NoteItemViewModel : ObservableObject
 {
-    private readonly Note _note;
+    private Note _note;
     private readonly NoteService _noteService;
     private readonly SettingsService _settingsService;
-    private readonly ProjectService _projectService;
+    private readonly ProjectCatalog _projects;
 
     [ObservableProperty] private bool _isExpanded;
-    [ObservableProperty] private string _editTitle;
+    [ObservableProperty] private string _editTitle = "";
     [ObservableProperty] private FlowDocument? _editDocument;
-    [ObservableProperty] private string _editProject;
-    [ObservableProperty] private string _editBranch;
-    [ObservableProperty] private string _editRepo;
-    [ObservableProperty] private string _editTags;
+    [ObservableProperty] private string _editProject = "";
+    [ObservableProperty] private string _editBranch = "";
+    [ObservableProperty] private string _editRepo = "";
+    [ObservableProperty] private string _editTags = "";
 
     // Split pane: true while the comma-separated tag editor replaces the chips.
     [ObservableProperty] private bool _isEditingTags;
     [ObservableProperty] private bool _isSelected;
     [ObservableProperty] private bool _isSelectMode;
 
-    public NoteItemViewModel(Note note, NoteService noteService, SettingsService settingsService, ProjectService projectService)
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SubtitleText))]
+    [NotifyPropertyChangedFor(nameof(ShowTags))]
+    [NotifyPropertyChangedFor(nameof(ShowSubtitleText))]
+    private string _subtitleDisplay = "project";
+
+    public NoteItemViewModel(Note note, NoteService noteService, SettingsService settingsService, ProjectCatalog projects)
     {
         _note = note;
         _noteService = noteService;
         _settingsService = settingsService;
-        _projectService = projectService;
-        _editTitle = note.Title;
-        _editProject = note.Project;
-        _editBranch = note.Branch;
-        _editRepo = note.Repo;
-        _editTags = string.Join(", ", note.Tags);
+        _projects = projects;
     }
 
     public Note Note => _note;
@@ -50,6 +52,7 @@ public partial class NoteItemViewModel : ObservableObject
     public string Repo => _note.Repo;
     public DateTime Created => _note.Created;
     public List<string> Tags => _note.Tags;
+    public string AttachmentsDir => _noteService.GetAttachmentsDir(_note);
 
     public string TimeAgo
     {
@@ -67,8 +70,6 @@ public partial class NoteItemViewModel : ObservableObject
 
     public bool HasTags => Tags.Count > 0;
 
-    public string SubtitleDisplay => _settingsService.Load().SubtitleDisplay;
-
     public string SubtitleText => SubtitleDisplay switch
     {
         "repo" => Repo,
@@ -79,20 +80,13 @@ public partial class NoteItemViewModel : ObservableObject
     public bool ShowTags => SubtitleDisplay == "tags" && Tags.Count > 0;
     public bool ShowSubtitleText => SubtitleDisplay != "tags" && !string.IsNullOrEmpty(SubtitleText);
 
-    /// <summary>Read-only rendered body for the split-view detail pane. Built on
-    /// demand for the single selected note (cheap — one note, not the whole list).</summary>
-    public FlowDocument ReadDocument =>
-        FlowDocumentHelper.BuildDocument(_note.Body, _noteService.GetAttachmentsDir(_note));
-
     public bool IsDone
     {
         get => _note.Status == NoteStatus.Done;
         set
         {
             _note.Status = value ? NoteStatus.Done : NoteStatus.Open;
-            _noteService.Save(_note);
-            OnPropertyChanged();
-            OnPropertyChanged(nameof(StatusMenuText));
+            Save();
             NoteChanged?.Invoke();
         }
     }
@@ -103,104 +97,63 @@ public partial class NoteItemViewModel : ObservableObject
     public event Action? NoteDeleted;
     public event Action<NoteItemViewModel, NoteItemViewModel>? DropReceived;
 
-    public Brush ProjectColorBrush
-    {
-        get
-        {
-            if (string.IsNullOrEmpty(Project)) return Brushes.Transparent;
-            var project = _projectService.Load()
-                .FirstOrDefault(p => p.Name.Equals(Project, StringComparison.OrdinalIgnoreCase));
-            if (project == null || string.IsNullOrEmpty(project.Color))
-                return Brushes.Transparent;
-            try
-            {
-                var color = (Color)System.Windows.Media.ColorConverter.ConvertFromString(project.Color);
-                return new SolidColorBrush(color);
-            }
-            catch { return Brushes.Transparent; }
-        }
-    }
+    public Brush ProjectColorBrush => _projects.BrushOf(Project) ?? Brushes.Transparent;
 
-    /// <summary>Combo entry meaning "no project" (the note's Project is "").</summary>
-    public const string NoProject = "No project";
+    /// <summary>Split pane project picker items: the same projects as the header.</summary>
+    public ObservableCollection<string> ProjectChoices => _projects.PickerChoices;
 
-    private List<string>? _projectChoices;
-
-    /// <summary>Split pane project picker items: "No project", every registered
-    /// project (projects.json, the same source as the header filter), plus this
-    /// note's own project if it is not registered. Loaded on first use only.</summary>
-    public List<string> ProjectChoices
-    {
-        get
-        {
-            if (_projectChoices != null) return _projectChoices;
-            var names = _projectService.Load().Select(p => p.Name).ToList();
-            if (!string.IsNullOrEmpty(_note.Project) && !names.Contains(_note.Project, StringComparer.OrdinalIgnoreCase))
-                names.Add(_note.Project);
-            _projectChoices = [NoProject, .. names];
-            return _projectChoices;
-        }
-    }
-
-    /// <summary>Split pane project picker value: EditProject with "" shown as
-    /// NoProject. Setting it commits at once through CommitSplitEdit.</summary>
+    /// <summary>Split pane project picker value. Setting it saves at once.</summary>
     public string SplitProjectChoice
     {
-        get => string.IsNullOrEmpty(EditProject) ? NoProject : EditProject;
+        get => _projects.DisplayName(EditProject);
         set
         {
-            var project = value == NoProject ? "" : (value ?? "");
-            if (project == EditProject) return;
+            // A ComboBox reports null when its selection drops out of the list. That
+            // is not the user choosing "no project", so it must not clear the project.
+            if (value == null) return;
+            var project = value == ProjectCatalog.NoProject ? "" : value;
+            if (ProjectCatalog.Same(project, EditProject)) return;
             EditProject = project;
             OnPropertyChanged();
-            CommitSplitEdit();
+            SaveEditor();
         }
+    }
+
+    /// <summary>
+    /// The file was read from disk again. This view model and any open editor carry
+    /// on. An editor with nothing unsaved follows a change made outside the app; one
+    /// with unsaved edits keeps them.
+    /// </summary>
+    public void Reload(Note fresh)
+    {
+        var fileChanged = fresh.ToMarkdown() != _note.ToMarkdown();
+        var editorFollows = EditDocument != null && !EditorHasChanges();
+        _note = fresh;
+        if (fileChanged && editorFollows)
+            LoadEditor();
+        RaiseDisplayChanged();
     }
 
     [RelayCommand]
     private void ToggleExpand()
     {
-        if (IsExpanded) IsExpanded = false;
+        if (IsExpanded) CancelEdits();
         else Expand();
     }
 
-    /// <summary>Open the inline edit form (list/grid layouts) primed with the
-    /// note's current values. Also how a freshly created note is revealed.</summary>
+    /// <summary>Open the inline edit form (list/grid layouts). Also how a freshly
+    /// created note is revealed.</summary>
     public void Expand()
     {
+        LoadEditor();
         IsExpanded = true;
-        EditTitle = _note.Title;
-        var attachDir = _noteService.GetAttachmentsDir(_note);
-        EditDocument = FlowDocumentHelper.BuildDocument(_note.Body, attachDir);
-        EditProject = _note.Project;
-        EditBranch = _note.Branch;
-        EditRepo = _note.Repo;
-        EditTags = string.Join(", ", _note.Tags);
     }
 
+    /// <summary>The Save button and Ctrl+S on a list card.</summary>
     [RelayCommand]
     private void SaveEdits()
     {
-        _note.Title = EditTitle;
-        if (EditDocument != null)
-        {
-            _note.Body = FlowDocumentHelper.SerializeDocument(EditDocument);
-            _note.Attachments = FlowDocumentHelper.GetAttachmentFilenames(EditDocument);
-        }
-        _note.Project = EditProject;
-        _note.Branch = EditBranch;
-        _note.Repo = EditRepo;
-        _note.Tags = ParseTags(EditTags);
-        _noteService.Save(_note);
-        IsExpanded = false;
-        OnPropertyChanged(nameof(Title));
-        OnPropertyChanged(nameof(Body));
-        OnPropertyChanged(nameof(Project));
-        OnPropertyChanged(nameof(Branch));
-        OnPropertyChanged(nameof(Repo));
-        OnPropertyChanged(nameof(Tags));
-        OnPropertyChanged(nameof(HasTags));
-        OnPropertyChanged(nameof(ReadDocument));
+        CloseEditor();
         NoteChanged?.Invoke();
     }
 
@@ -208,74 +161,114 @@ public partial class NoteItemViewModel : ObservableObject
     private void CancelEdits()
     {
         IsExpanded = false;
+        EditDocument = null;
     }
 
-    // Baseline body (serialized) captured when the split detail editor is primed,
-    // so CommitSplitEdit can tell real edits from mere browsing.
-    private string? _splitEditBaseline;
+    /// <summary>Save what the editor holds and let go of it. A new editor always
+    /// builds a new document, because a FlowDocument cannot move to a second RichTextBox.</summary>
+    public void CloseEditor()
+    {
+        SaveEditor();
+        CancelEdits();
+    }
 
-    /// <summary>Prime the split detail pane's in-place editor: load the title and
-    /// a freshly rendered body, then snapshot a baseline for change detection.</summary>
-    public void BeginSplitEdit()
+    // The body as first drawn in the editor. Drawing and reading back can differ from
+    // the stored text, so comparing against this is what keeps browsing from saving.
+    private string? _editorBaseline;
+
+    /// <summary>The one way note values reach the editor, for list cards and the split pane alike.</summary>
+    public void LoadEditor()
     {
         EditTitle = _note.Title;
-        EditTags = string.Join(", ", _note.Tags);
-        IsEditingTags = false;
         EditProject = _note.Project;
+        EditBranch = _note.Branch;
+        EditRepo = _note.Repo;
+        EditTags = FormatTags(_note.Tags);
+        IsEditingTags = false;
         OnPropertyChanged(nameof(SplitProjectChoice));
-        EditDocument = FlowDocumentHelper.BuildDocument(_note.Body, _noteService.GetAttachmentsDir(_note));
-        _splitEditBaseline = FlowDocumentHelper.SerializeDocument(EditDocument);
+        EditDocument = FlowDocumentHelper.BuildDocument(_note.Body, AttachmentsDir);
+        _editorBaseline = FlowDocumentHelper.SerializeDocument(EditDocument);
     }
 
-    /// <summary>Persist the split detail pane's in-place edits — but only when the
-    /// title or body actually changed, so simply browsing notes never rewrites a
-    /// file or churns the list. Deliberately does NOT raise <see cref="NoteChanged"/>:
-    /// the file watcher drives the refresh, which keeps this re-entrancy-safe.</summary>
-    public void CommitSplitEdit()
+    /// <summary>Saves the editor if it holds anything new; browsing never rewrites a file.</summary>
+    public void SaveEditor()
     {
-        if (EditDocument == null) return; // never primed → nothing to commit
+        if (EditorHasChanges())
+            Save();
+    }
 
-        var newBody = FlowDocumentHelper.SerializeDocument(EditDocument);
-        var newTitle = EditTitle ?? "";
-        var newTags = ParseTags(EditTags);
-        var newProject = EditProject ?? "";
-        var bodyChanged = newBody != _splitEditBaseline;
-        var titleChanged = newTitle != _note.Title;
-        var tagsChanged = !newTags.SequenceEqual(_note.Tags);
-        var projectChanged = newProject != _note.Project;
-        if (!bodyChanged && !titleChanged && !tagsChanged && !projectChanged) return;
+    private bool EditorHasChanges() =>
+        EditDocument != null &&
+        (FlowDocumentHelper.SerializeDocument(EditDocument) != _editorBaseline
+         || (EditTitle ?? "") != _note.Title
+         || (EditProject ?? "") != _note.Project
+         || (EditBranch ?? "") != _note.Branch
+         || (EditRepo ?? "") != _note.Repo
+         || !ParseTags(EditTags).SequenceEqual(_note.Tags));
 
-        if (titleChanged) _note.Title = newTitle;
-        if (tagsChanged) _note.Tags = newTags;
-        if (projectChanged) _note.Project = newProject;
-        if (bodyChanged)
+    /// <summary>
+    /// The one way a note reaches the disk. Whatever is open in the editor goes with
+    /// it, so no save (a priority change, a tick, a drag) ever writes a body older
+    /// than the one on screen.
+    /// </summary>
+    private void Save(bool stampUpdated = true)
+    {
+        if (EditorHasChanges())
         {
-            _note.Body = newBody;
-            _note.Attachments = FlowDocumentHelper.GetAttachmentFilenames(EditDocument);
+            var body = FlowDocumentHelper.SerializeDocument(EditDocument!);
+            if (body != _editorBaseline)
+            {
+                _note.Body = body.Trim(); // reading a file trims too
+                _editorBaseline = body;
+            }
+            _note.Title = EditTitle ?? "";
+            _note.Project = EditProject ?? "";
+            _note.Branch = EditBranch ?? "";
+            _note.Repo = EditRepo ?? "";
+            _note.Tags = ParseTags(EditTags);
+            stampUpdated = true;
         }
-        _noteService.Save(_note);
-        _splitEditBaseline = newBody;
+        _noteService.Save(_note, stampUpdated);
+        RaiseDisplayChanged();
+    }
 
+    private void RaiseDisplayChanged()
+    {
         OnPropertyChanged(nameof(Title));
         OnPropertyChanged(nameof(Body));
+        OnPropertyChanged(nameof(Project));
+        OnPropertyChanged(nameof(Priority));
+        OnPropertyChanged(nameof(Branch));
+        OnPropertyChanged(nameof(Repo));
         OnPropertyChanged(nameof(Tags));
         OnPropertyChanged(nameof(HasTags));
         OnPropertyChanged(nameof(ShowTags));
-        OnPropertyChanged(nameof(Project));
-        OnPropertyChanged(nameof(ProjectColorBrush));
         OnPropertyChanged(nameof(SubtitleText));
         OnPropertyChanged(nameof(ShowSubtitleText));
-        OnPropertyChanged(nameof(ReadDocument));
+        OnPropertyChanged(nameof(ProjectColorBrush));
+        OnPropertyChanged(nameof(TimeAgo));
+        OnPropertyChanged(nameof(IsDone));
+        OnPropertyChanged(nameof(StatusMenuText));
     }
 
     /// <summary>The one tag parser: comma-separated text to a trimmed,
-    /// de-duplicated (case-sensitive) list. Used by the list card's Save and the
-    /// split pane's commit.</summary>
+    /// de-duplicated (case-sensitive) list.</summary>
     public static List<string> ParseTags(string? text) =>
         (text ?? "")
             .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
             .Distinct()
             .ToList();
+
+    /// <summary>The reverse of <see cref="ParseTags"/>.</summary>
+    public static string FormatTags(IEnumerable<string> tags) => string.Join(", ", tags);
+
+    /// <summary>A drag gave this note a new position. Moving a note is not editing
+    /// it, so its "updated" date stays unless the editor also held changes.</summary>
+    public void SetSortOrder(int sortOrder)
+    {
+        _note.SortOrder = sortOrder;
+        Save(stampUpdated: false);
+    }
 
     [RelayCommand]
     private void SetPriorityHigh() => SetPriority(NotePriority.High);
@@ -289,8 +282,7 @@ public partial class NoteItemViewModel : ObservableObject
     private void SetPriority(NotePriority priority)
     {
         _note.Priority = priority;
-        _noteService.Save(_note);
-        OnPropertyChanged(nameof(Priority));
+        Save();
         NoteChanged?.Invoke();
     }
 
@@ -314,6 +306,7 @@ public partial class NoteItemViewModel : ObservableObject
             if (result != System.Windows.MessageBoxResult.Yes)
                 return;
         }
+        CancelEdits(); // nothing may save this note back after it is gone
         _noteService.Delete(_note);
         NoteDeleted?.Invoke();
     }
@@ -326,9 +319,7 @@ public partial class NoteItemViewModel : ObservableObject
         var repoPath = Repo;
         if (string.IsNullOrEmpty(repoPath) || !System.IO.Directory.Exists(repoPath))
         {
-            var project = _projectService.Load()
-                .FirstOrDefault(p => p.Name.Equals(Project, StringComparison.OrdinalIgnoreCase));
-            repoPath = project?.Repo ?? "";
+            repoPath = _projects.RepoOf(Project);
         }
 
         if (string.IsNullOrEmpty(repoPath) || !System.IO.Directory.Exists(repoPath))
@@ -407,16 +398,14 @@ public partial class NoteItemViewModel : ObservableObject
             if (!imageExtensions.Contains(ext)) continue;
 
             var fileName = _noteService.AddAttachment(_note, path);
-            var attachDir = _noteService.GetAttachmentsDir(_note);
-            FlowDocumentHelper.InsertAttachment(richTextBox, fileName, attachDir);
+            FlowDocumentHelper.InsertAttachment(richTextBox, fileName, AttachmentsDir);
         }
     }
 
     public void HandleImagePaste(System.Windows.Media.Imaging.BitmapSource image, System.Windows.Controls.RichTextBox richTextBox)
     {
         var fileName = _noteService.AddAttachmentFromImage(_note, image);
-        var attachDir = _noteService.GetAttachmentsDir(_note);
-        FlowDocumentHelper.InsertAttachment(richTextBox, fileName, attachDir);
+        FlowDocumentHelper.InsertAttachment(richTextBox, fileName, AttachmentsDir);
     }
 
     public void HandleImageUpload(System.Windows.Controls.RichTextBox richTextBox)

@@ -13,8 +13,6 @@ namespace JLNotes.Helpers;
 
 public static class FlowDocumentHelper
 {
-    // Shared with ExportService: single source of truth for the {{token}} grammar.
-    internal static readonly Regex AttachmentTokenRegex = new(@"\{\{(.+?)\}\}", RegexOptions.Compiled);
     // Scheme'd URLs plus bare www. domains ("www.corvascular.com").
     private static readonly Regex UrlRegex = new(@"(?:https?://|www\.)\S+", RegexOptions.Compiled);
     // Task-list line: optional indent, "- [ ]" / "- [x]", optional trailing space.
@@ -33,6 +31,12 @@ public static class FlowDocumentHelper
     /// (inline thumbnails here, embedded pictures in Word export).</summary>
     internal static bool IsImageFile(string filename) =>
         ImageExtensions.Contains(Path.GetExtension(filename));
+
+    /// <summary>The one rule for what {{x}} means: an attachment only if file x is in
+    /// the note's folder. Anything else, like the template text {{companyName}}, is
+    /// ordinary text.</summary>
+    internal static bool IsAttachment(string token, string attachmentsDir) =>
+        token == Path.GetFileName(token) && File.Exists(Path.Combine(attachmentsDir, token));
 
     // Display cap for inline thumbnails (DIP); decode at up to 3x for hi-DPI crispness.
     private const double ThumbMaxWidth = 300;
@@ -57,8 +61,7 @@ public static class FlowDocumentHelper
         }
 
         // Split the body text by attachment tokens, keeping the captures
-        var parts = AttachmentTokenRegex.Split(bodyText);
-        var matches = AttachmentTokenRegex.Matches(bodyText);
+        var parts = Models.Note.AttachmentToken.Split(bodyText);
 
         // parts[0] is text before first match, parts[1] is first capture group,
         // parts[2] is text between first and second match, etc.
@@ -93,10 +96,11 @@ public static class FlowDocumentHelper
             }
             else
             {
-                // Attachment filename — create inline UI element
-                var filename = parts[i];
-                var container = CreateAttachmentInline(filename, attachmentsDir);
-                currentParagraph.Inlines.Add(container);
+                var token = parts[i];
+                if (IsAttachment(token, attachmentsDir))
+                    currentParagraph.Inlines.Add(CreateAttachmentInline(token, attachmentsDir));
+                else
+                    currentParagraph.Inlines.Add(new Run("{{" + token + "}}"));
             }
         }
 
@@ -151,32 +155,6 @@ public static class FlowDocumentHelper
             foreach (var child in span.Inlines)
                 AppendInlineText(sb, child);
         }
-    }
-
-    public static List<string> GetAttachmentFilenames(FlowDocument doc)
-    {
-        var filenames = new List<string>();
-
-        foreach (var block in doc.Blocks)
-        {
-            if (block is Paragraph paragraph)
-            {
-                foreach (var inline in paragraph.Inlines)
-                {
-                    // CheckBox containers carry a string Tag too (their indent) --
-                    // they are task checkboxes, not attachments.
-                    if (inline is InlineUIContainer container &&
-                        container.Child is FrameworkElement element &&
-                        element is not CheckBox &&
-                        element.Tag is string tagValue)
-                    {
-                        filenames.Add(tagValue);
-                    }
-                }
-            }
-        }
-
-        return filenames;
     }
 
     public static void InsertAttachment(RichTextBox richTextBox, string filename, string attachmentsDir)
@@ -318,13 +296,11 @@ public static class FlowDocumentHelper
 
     private static InlineUIContainer CreateAttachmentInline(string filename, string attachmentsDir)
     {
-        var filePath = Path.Combine(attachmentsDir, filename);
-
-        if (File.Exists(filePath) && IsImageFile(filename))
+        if (IsImageFile(filename))
         {
             try
             {
-                return new InlineUIContainer(CreateThumbnail(filename, filePath));
+                return new InlineUIContainer(CreateThumbnail(filename, Path.Combine(attachmentsDir, filename)));
             }
             catch
             {

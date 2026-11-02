@@ -3,6 +3,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using JLNotes.Models;
 using JLNotes.Services;
+using JLNotes.ViewModels;
 
 namespace JLNotes.Tests.Services;
 
@@ -83,7 +84,6 @@ public class AttachmentImageTests : IDisposable
         var note = CreateSavedNote();
         var fileName = _service.AddAttachmentFromImage(note, CreateTestBitmap());
         note.Body = "before\n{{" + fileName + "}}\nafter";
-        note.Attachments = [fileName]; // Save() deletes files not listed here
         _service.Save(note);
 
         var outPath = Path.Combine(_testDir, "export.docx");
@@ -105,19 +105,116 @@ public class AttachmentImageTests : IDisposable
     }
 
     [Fact]
-    public void ExportToWord_MissingAttachment_FallsBackToFilenameText()
+    public void ExportToWord_TokenWithNoFile_StaysAsWritten()
     {
         var note = CreateSavedNote();
-        note.Body = "see {{gone.png}} here";
+        note.Body = "Dear {{companyName}} here";
         _service.Save(note);
 
         var outPath = Path.Combine(_testDir, "export-missing.docx");
         ExportService.ExportToWord([note], outPath, _service.GetAttachmentsDir);
 
         using var doc = DocumentFormat.OpenXml.Packaging.WordprocessingDocument.Open(outPath, false);
-        var main = doc.MainDocumentPart!;
-        Assert.Empty(main.ImageParts);
-        Assert.Contains("gone.png", main.Document.InnerText);
-        Assert.DoesNotContain("{{", main.Document.InnerText);
+        Assert.Contains("Dear {{companyName}} here", doc.MainDocumentPart!.Document!.InnerText);
+    }
+
+    [Fact]
+    public void Save_LeavingTheBodyAlone_KeepsAnImageNotYetInTheBody()
+    {
+        var note = CreateSavedNote();
+        var fileName = _service.AddAttachmentFromImage(note, CreateTestBitmap());
+
+        note.Priority = NotePriority.High;
+        _service.Save(note);
+
+        Assert.True(File.Exists(Path.Combine(_service.GetAttachmentsDir(note), fileName)));
+    }
+
+    [Fact]
+    public void Save_RemovingTheTokenFromTheBody_DeletesTheImage()
+    {
+        var note = CreateSavedNote();
+        var fileName = _service.AddAttachmentFromImage(note, CreateTestBitmap());
+        note.Body = "{{" + fileName + "}}";
+        _service.Save(note);
+        Assert.True(File.Exists(Path.Combine(_service.GetAttachmentsDir(note), fileName)));
+
+        note.Body = "no image now";
+        _service.Save(note);
+
+        Assert.False(File.Exists(Path.Combine(_service.GetAttachmentsDir(note), fileName)));
+    }
+
+    [Fact]
+    public void PasteThenChangePriority_KeepsTheImageAndItsToken()
+    {
+        var failure = default(Exception);
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                var note = CreateSavedNote();
+                var vm = new NoteItemViewModel(note, _service, new SettingsService(_testDir), new ProjectCatalog());
+                vm.LoadEditor();
+                var editor = new System.Windows.Controls.RichTextBox { Document = vm.EditDocument };
+
+                vm.HandleImagePaste(CreateTestBitmap(), editor);
+                vm.SetPriorityHighCommand.Execute(null);
+
+                var token = Assert.Single(_service.LoadAll().Single().GetAttachmentTokens());
+                Assert.True(File.Exists(Path.Combine(_service.GetAttachmentsDir(note), token)));
+            }
+            catch (Exception e) { failure = e; }
+        });
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        thread.Join();
+        if (failure != null) throw failure;
+    }
+
+    [Fact]
+    public void NotesWithTheSameTitle_CannotTouchEachOthersImages()
+    {
+        var monday = new Note { Title = "Weekly sync", Created = new DateTime(2026, 1, 5) };
+        var nextMonday = new Note { Title = "Weekly sync", Created = new DateTime(2026, 1, 12) };
+        _service.Save(monday);
+        _service.Save(nextMonday);
+        var image = _service.AddAttachmentFromImage(monday, CreateTestBitmap());
+        monday.Body = "{{" + image + "}}";
+        _service.Save(monday);
+        var imagePath = Path.Combine(_service.GetAttachmentsDir(monday), image);
+
+        nextMonday.Body = "edited";
+        _service.Save(nextMonday);
+        Assert.True(File.Exists(imagePath));
+
+        _service.Delete(nextMonday);
+        Assert.True(File.Exists(imagePath));
+    }
+
+    [Fact]
+    public void Migration_GivesEachNoteItsOwnFolder_AndLeavesOtherFoldersAlone()
+    {
+        var root = Path.Combine(_testDir, "attachments");
+        Directory.CreateDirectory(Path.Combine(root, "weekly-sync"));
+        Directory.CreateDirectory(Path.Combine(root, "2026-09-21-hand-made"));
+        File.WriteAllText(Path.Combine(root, "weekly-sync", "a.png"), "a");
+        File.WriteAllText(Path.Combine(root, "weekly-sync", "shared.png"), "s");
+        File.WriteAllText(Path.Combine(root, "2026-09-21-hand-made", "mine.md"), "m");
+        var first = new Note { Title = "Weekly sync", Body = "{{a.png}} {{shared.png}} {{companyName}}", Created = new DateTime(2026, 1, 5) };
+        var second = new Note { Title = "Weekly sync", Body = "{{shared.png}}", Created = new DateTime(2026, 1, 12) };
+        _service.Save(first);
+        _service.Save(second);
+
+        _service.MigrateAttachmentFolders();
+
+        Assert.True(File.Exists(Path.Combine(root, "2026-01-05-weekly-sync", "a.png")));
+        Assert.True(File.Exists(Path.Combine(root, "2026-01-05-weekly-sync", "shared.png")));
+        Assert.True(File.Exists(Path.Combine(root, "2026-01-12-weekly-sync", "shared.png")));
+        Assert.False(Directory.Exists(Path.Combine(root, "weekly-sync")));
+        Assert.True(File.Exists(Path.Combine(root, "2026-09-21-hand-made", "mine.md")));
+
+        _service.MigrateAttachmentFolders(); // nothing left to do
+        Assert.True(File.Exists(Path.Combine(root, "2026-01-05-weekly-sync", "a.png")));
     }
 }

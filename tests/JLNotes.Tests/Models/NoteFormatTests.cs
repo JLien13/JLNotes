@@ -46,7 +46,7 @@ public class NoteFormatTests : IDisposable
         var note = new Note
         {
             Title = value, Project = value, Repo = value, Branch = value,
-            Tags = [value, "plain"], Attachments = [value],
+            Tags = [value, "plain"],
             Body = "body", Created = new DateTime(2026, 1, 2, 3, 4, 5), Updated = new DateTime(2026, 2, 3, 4, 5, 6),
         };
 
@@ -57,7 +57,6 @@ public class NoteFormatTests : IDisposable
         Assert.Equal(value, read.Repo);
         Assert.Equal(value, read.Branch);
         Assert.Equal(new[] { value, "plain" }, read.Tags);
-        Assert.Equal(new[] { value }, read.Attachments);
     }
 
     // Guard: a new Note property must be added to the header list or marked
