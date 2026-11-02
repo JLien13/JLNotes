@@ -9,3 +9,8 @@ output/
 *.log
 .idea/
 .vscode/
+
+# Business files that were once saved in this folder by mistake. Never commit them.
+/sales-briefings/
+/jlnotes-export-*.docx
+/vg-fleet-control-canvas-*.md

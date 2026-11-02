@@ -39,7 +39,7 @@ updated: 2026-03-12T10:00:00
 Details about the note...
 ```
 
-Claude Code can create notes directly by writing markdown files to the notes folder — they appear in JL Notes immediately.
+Claude Code can create notes directly by writing markdown files to the notes folder — they appear in JL Notes immediately. A hand-written file always loads, even with a rough header or none at all (the title then comes from its first heading or its file name), and the app quotes values properly the next time it saves.
 
 ## Installation
 

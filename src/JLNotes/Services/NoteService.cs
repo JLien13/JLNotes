@@ -26,9 +26,15 @@ public class NoteService : IDisposable
         _attachmentsBaseDir = Path.Combine(Path.GetDirectoryName(_notesDir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))!, "attachments");
     }
 
+    /// <summary>File names the last LoadAll could not read. Bad headers load fine,
+    /// so this is for real read failures (a locked file), which the panel shows
+    /// instead of letting a note vanish silently.</summary>
+    public IReadOnlyList<string> UnreadableFiles { get; private set; } = [];
+
     public List<Note> LoadAll()
     {
         var notes = new List<Note>();
+        var unreadable = new List<string>();
         foreach (var file in Directory.GetFiles(_notesDir, "*.md"))
         {
             try
@@ -36,15 +42,18 @@ public class NoteService : IDisposable
                 var content = File.ReadAllText(file);
                 notes.Add(Note.ParseFromMarkdown(content, file));
             }
-            catch
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
             {
-                // Skip malformed files
+                unreadable.Add(Path.GetFileName(file));
             }
         }
+        UnreadableFiles = unreadable;
         return notes.OrderBy(n => n.SortOrder).ThenByDescending(n => n.Created).ToList();
     }
 
-    public void Save(Note note)
+    /// <param name="note">The note to write.</param>
+    /// <param name="stampUpdated">False when nothing the user wrote changed, such as a new sort position.</param>
+    public void Save(Note note, bool stampUpdated = true)
     {
         var oldSlug = "";
         if (!string.IsNullOrEmpty(note.FilePath) && File.Exists(note.FilePath))
@@ -69,7 +78,8 @@ public class NoteService : IDisposable
                 candidate = Path.Combine(_notesDir, $"{stem}-{n}{ext}");
             note.FilePath = candidate;
         }
-        note.Updated = DateTime.Now;
+        if (stampUpdated)
+            note.Updated = DateTime.Now;
         // Record before writing: the watcher fires asynchronously and may beat
         // the line after WriteAllText, so the entry must already be in place.
         RecordSelfWrite(note.FilePath);
