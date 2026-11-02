@@ -75,6 +75,7 @@ public partial class App : Application
 
         // Create services
         _noteService = new NoteService(AppPaths.NotesDir);
+        _noteService.MigrateAttachmentFolders();
         _settingsService = new SettingsService(BaseDir);
         _projectService = new ProjectService(BaseDir);
         _updateService = new UpdateService(BaseDir);
@@ -162,7 +163,7 @@ public partial class App : Application
     {
         if (sender is not System.Windows.Controls.TextBox box || box.DataContext is not NoteItemViewModel vm) return;
         if (e.Key == System.Windows.Input.Key.Escape)
-            vm.EditTags = string.Join(", ", vm.Tags); // revert, then fall through to close
+            vm.EditTags = NoteItemViewModel.FormatTags(vm.Tags); // revert, then fall through to close
         else if (e.Key != System.Windows.Input.Key.Enter)
             return;
         e.Handled = true;
@@ -173,7 +174,7 @@ public partial class App : Application
     {
         if ((sender as FrameworkElement)?.DataContext is not NoteItemViewModel vm) return;
         vm.IsEditingTags = false;
-        vm.CommitSplitEdit();
+        vm.SaveEditor();
     }
 
     /// <summary>The app's one updater instance (Settings and the header link share it).</summary>
@@ -242,7 +243,7 @@ public partial class App : Application
     /// <summary>Everything OnExit saves, callable before an external kill.</summary>
     private void PersistSessionState()
     {
-        (_mainPanel?.DataContext as MainViewModel)?.CommitSplitEdit();
+        MainVm?.SaveSplitEditor();
 
         if (_mainPanel != null && _settingsService != null)
         {

@@ -142,12 +142,14 @@ public class LinkAndCheckboxTests
     }
 
     [Fact]
-    public void Checkboxes_AreNotReportedAsAttachments()
+    public void TokenWithNoFile_IsPlainText_AndRoundTrips()
     {
         Sta(() =>
         {
-            var doc = FlowDocumentHelper.BuildDocument("- [ ] task\n{{shot.png}}", AttachDir);
-            Assert.Equal(["shot.png"], FlowDocumentHelper.GetAttachmentFilenames(doc));
+            const string body = "Dear {{companyName}}, see {{{path}} and {{ opacity: 1 }}";
+            var doc = FlowDocumentHelper.BuildDocument(body, AttachDir);
+            Assert.Empty(doc.Blocks.OfType<Paragraph>().SelectMany(p => p.Inlines.OfType<InlineUIContainer>()));
+            Assert.Equal(body, FlowDocumentHelper.SerializeDocument(doc));
         });
     }
 

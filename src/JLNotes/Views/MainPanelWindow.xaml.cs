@@ -29,7 +29,7 @@ public partial class MainPanelWindow : Window
     protected override void OnDeactivated(EventArgs e)
     {
         base.OnDeactivated(e);
-        (DataContext as MainViewModel)?.CommitSplitEdit();
+        (DataContext as MainViewModel)?.SaveSplitEditor();
     }
 
     private void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
@@ -256,7 +256,7 @@ public partial class MainPanelWindow : Window
     {
         if (DataContext is MainViewModel mainVm)
         {
-            mainVm.CommitSplitEdit();
+            mainVm.SaveSplitEditor();
             var settings = mainVm.SettingsService.Load();
             if (settings.CloseBehavior == "quit")
             {
@@ -341,7 +341,7 @@ public partial class MainPanelWindow : Window
         }
         else if (e.Key == Key.S && Keyboard.Modifiers == ModifierKeys.Control)
         {
-            mainVm.SaveExpanded();
+            mainVm.SaveOpenEditors();
             e.Handled = true;
         }
     }

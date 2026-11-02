@@ -102,18 +102,22 @@ public static class ExportService
             {
                 var line = rawLine.TrimEnd('\r');
 
-                // {{attachment}} tokens (same grammar as the in-app renderer):
-                // image files embed as pictures, anything else as its filename.
-                var tokens = FlowDocumentHelper.AttachmentTokenRegex.Matches(line);
+                // Attachment tokens (same rule as the in-app renderer): image files
+                // embed as pictures, other files as their name, and a {{x}} with no
+                // file behind it stays in the text as written.
+                var attachmentsDir = getAttachmentsDir(note);
+                var tokens = Note.AttachmentToken.Matches(line)
+                    .Where(t => FlowDocumentHelper.IsAttachment(t.Groups[1].Value, attachmentsDir))
+                    .ToList();
                 if (tokens.Count > 0)
                 {
                     var pos = 0;
-                    foreach (System.Text.RegularExpressions.Match token in tokens)
+                    foreach (var token in tokens)
                     {
                         var before = line[pos..token.Index].Trim();
                         if (before.Length > 0)
                             body.AppendChild(CreateStyledParagraph(before, 22));
-                        AppendAttachment(body, mainPart, getAttachmentsDir(note), token.Groups[1].Value);
+                        AppendAttachment(body, mainPart, attachmentsDir, token.Groups[1].Value);
                         pos = token.Index + token.Length;
                     }
                     var after = line[pos..].Trim();
@@ -140,8 +144,7 @@ public static class ExportService
     {
         var path = Path.Combine(attachmentsDir, filename);
 
-        if (File.Exists(path) && FlowDocumentHelper.IsImageFile(filename) &&
-            TryGetImagePartType(filename, out var partType))
+        if (FlowDocumentHelper.IsImageFile(filename) && TryGetImagePartType(filename, out var partType))
         {
             try
             {

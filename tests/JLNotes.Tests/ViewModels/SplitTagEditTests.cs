@@ -5,8 +5,8 @@ using JLNotes.ViewModels;
 
 namespace JLNotes.Tests.ViewModels;
 
-// Tags edited in the split detail pane go through the same BeginSplitEdit /
-// CommitSplitEdit path as the title and body, and the same comma-separated
+// Tags edited in the split detail pane go through the same LoadEditor /
+// SaveEditor path as the title and body, and the same comma-separated
 // parser the list card uses.
 public class SplitTagEditTests : IDisposable
 {
@@ -35,17 +35,17 @@ public class SplitTagEditTests : IDisposable
     {
         var note = new Note { Title = "Tagged", Body = "body", Tags = [.. tags], Created = new DateTime(2026, 9, 14) };
         _noteService.Save(note);
-        return new NoteItemViewModel(note, _noteService, _settingsService, _projectService);
+        return new NoteItemViewModel(note, _noteService, _settingsService, new ProjectCatalog());
     }
 
     [Fact]
     public void Commit_AfterTagEdit_PersistsToDisk()
     {
         var vm = SavedVm("competitor");
-        vm.BeginSplitEdit();
+        vm.LoadEditor();
 
         vm.EditTags = "competitor, hokanson, intel";
-        vm.CommitSplitEdit();
+        vm.SaveEditor();
 
         Assert.Equal(["competitor", "hokanson", "intel"], vm.Note.Tags);
         var reloaded = Note.ParseFromMarkdown(File.ReadAllText(vm.Note.FilePath), vm.Note.FilePath);
@@ -56,10 +56,10 @@ public class SplitTagEditTests : IDisposable
     public void Commit_RemovingAllTags_PersistsEmptyList()
     {
         var vm = SavedVm("a", "b");
-        vm.BeginSplitEdit();
+        vm.LoadEditor();
 
         vm.EditTags = "";
-        vm.CommitSplitEdit();
+        vm.SaveEditor();
 
         Assert.Empty(vm.Note.Tags);
         Assert.False(vm.HasTags);
@@ -69,11 +69,11 @@ public class SplitTagEditTests : IDisposable
     public void Commit_WithSameTagsRetyped_DoesNotRewriteFile()
     {
         var vm = SavedVm("a", "b");
-        vm.BeginSplitEdit();
+        vm.LoadEditor();
         var before = File.GetLastWriteTimeUtc(vm.Note.FilePath);
 
         vm.EditTags = " a ,b, ";
-        vm.CommitSplitEdit();
+        vm.SaveEditor();
 
         Assert.Equal(before, File.GetLastWriteTimeUtc(vm.Note.FilePath));
     }

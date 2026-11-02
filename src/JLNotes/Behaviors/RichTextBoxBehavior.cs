@@ -41,9 +41,12 @@ public static class RichTextBoxBehavior
         // Clean up
         KillPopup();
 
-        if (e.NewValue is FlowDocument doc)
+        rtb.IsVisibleChanged -= OnEditorVisibleChanged;
+        rtb.IsVisibleChanged += OnEditorVisibleChanged;
+        ShowDocument(rtb);
+
+        if (e.NewValue is FlowDocument)
         {
-            rtb.Document = doc;
             // Lets embedded controls work while editable: task checkboxes toggle
             // on click, hyperlinks open on Ctrl+Click.
             rtb.IsDocumentEnabled = true;
@@ -62,10 +65,22 @@ public static class RichTextBoxBehavior
             rtb.MouseLeave += OnMouseLeave;
             DataObject.AddPastingHandler(rtb, OnPaste);
         }
-        else
-        {
-            rtb.Document = new FlowDocument();
-        }
+    }
+
+    private static void OnEditorVisibleChanged(object sender, DependencyPropertyChangedEventArgs e) =>
+        ShowDocument((RichTextBox)sender);
+
+    // A FlowDocument can belong to only one RichTextBox, and WPF keeps collapsed editors
+    // alive and bound to their note (a closed card, the split pane in list view). So an
+    // editor hidden inside the showing window holds a blank page, which leaves the note's
+    // document free for the editor on screen. Hiding the whole window to the tray changes
+    // nothing, so the caret is still there when it comes back.
+    private static void ShowDocument(RichTextBox rtb)
+    {
+        var hiddenInWindow = !rtb.IsVisible && Window.GetWindow(rtb)?.IsVisible == true;
+        var document = hiddenInWindow ? null : GetDocument(rtb);
+        if (document == null || !ReferenceEquals(rtb.Document, document))
+            rtb.Document = document ?? new FlowDocument();
     }
 
     #endregion
@@ -337,7 +352,7 @@ public static class RichTextBoxBehavior
         {
             if (element.Tag is not string filename) return null;
             if (rtb.DataContext is not NoteItemViewModel vm) return null;
-            return Path.Combine(vm.Note.GetAttachmentsDir(), filename);
+            return Path.Combine(vm.AttachmentsDir, filename);
         }
         catch { return null; }
     }

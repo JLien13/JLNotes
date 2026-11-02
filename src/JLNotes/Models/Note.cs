@@ -18,7 +18,6 @@ public class Note
     public NotePriority Priority { get; set; } = NotePriority.Medium;
     public NoteStatus Status { get; set; } = NoteStatus.Open;
     public List<string> Tags { get; set; } = [];
-    public List<string> Attachments { get; set; } = [];
     public DateTime Created { get; set; } = DateTime.Now;
     public DateTime Updated { get; set; } = DateTime.Now;
     public string Repo { get; set; } = "";
@@ -46,7 +45,6 @@ public class Note
         new("priority", n => n.Priority.ToString().ToLowerInvariant(), (n, v) => n.Priority = ReadEnum(v, NotePriority.Medium)),
         new("status", n => n.Status.ToString().ToLowerInvariant(), (n, v) => n.Status = ReadEnum(v, NoteStatus.Open)),
         new("tags", n => WriteList(n.Tags), (n, v) => n.Tags = ReadList(v)),
-        new("attachments", n => WriteList(n.Attachments), (n, v) => n.Attachments = ReadList(v)),
         new("created", n => WriteDate(n.Created), (n, v) => n.Created = ReadDate(v)),
         new("updated", n => WriteDate(n.Updated), (n, v) => n.Updated = ReadDate(v)),
         new("repo", n => OmitIfEmpty(n.Repo), (n, v) => n.Repo = ReadText(v)),
@@ -59,6 +57,10 @@ public class Note
     private static readonly Regex HeaderLine = new(@"^([A-Za-z][A-Za-z0-9_-]*):(?:[ \t]+(.*))?$", RegexOptions.Compiled);
     private static readonly Regex FirstHeading = new(@"^#{1,6}[ \t]+(.+?)[ \t]*$", RegexOptions.Compiled | RegexOptions.Multiline);
     private static readonly Regex DatePrefix = new(@"^(\d{4}-\d{2}-\d{2})-", RegexOptions.Compiled);
+
+    /// <summary>The {{file}} grammar. The tokens in a note's body are the only
+    /// record of its attachments; no list of them is kept anywhere else.</summary>
+    internal static readonly Regex AttachmentToken = new(@"\{\{(.+?)\}\}", RegexOptions.Compiled);
 
     // Text that YAML reads back exactly as written with no quotes around it.
     private static readonly Regex PlainText = new(@"^[A-Za-z0-9](?:[A-Za-z0-9 ,.'()/_+\-]*[A-Za-z0-9.)'])?$", RegexOptions.Compiled);
@@ -119,17 +121,19 @@ public class Note
         return sb.ToString();
     }
 
+    /// <summary>The file name without its date prefix. Two notes can share this, so
+    /// it never identifies a note; use it only for suggesting a name to the user.</summary>
     public string GetSlug()
     {
         var fileName = Path.GetFileNameWithoutExtension(FilePath);
-        // Remove date prefix (YYYY-MM-DD-)
-        if (fileName.Length > 11 && fileName[4] == '-' && fileName[7] == '-' && fileName[10] == '-')
-            return fileName.Substring(11);
-        return fileName;
+        var slug = DatePrefix.Replace(fileName, "");
+        return slug.Length > 0 ? slug : fileName;
     }
 
-    public string GetAttachmentsDir()
-        => Path.Combine(AppPaths.AttachmentsDir, GetSlug());
+    /// <summary>What the {{...}} tokens in the body name. Whether one is really an
+    /// attachment depends on the file existing (FlowDocumentHelper.IsAttachment).</summary>
+    public IEnumerable<string> GetAttachmentTokens() =>
+        AttachmentToken.Matches(Body).Select(m => m.Groups[1].Value);
 
     public string GenerateFileName()
     {
