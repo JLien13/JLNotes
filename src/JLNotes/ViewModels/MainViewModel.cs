@@ -138,6 +138,18 @@ public partial class MainViewModel : ObservableObject
         : _cachedNotes.Count == 0 ? "No notes yet — hit + to add one"
         : "Nothing here — try toggling filters";
 
+    /// <summary>Shown under the search bar when a note file could not be read at
+    /// all; null hides it. A note should never just go missing without a word.</summary>
+    public string? UnreadableNotesMessage => _noteService.UnreadableFiles.Count switch
+    {
+        0 => null,
+        1 => "1 note could not be read",
+        var count => $"{count} notes could not be read"
+    };
+
+    /// <summary>Names the unreadable files, for the message's tooltip.</summary>
+    public string UnreadableNotesDetail => string.Join(Environment.NewLine, _noteService.UnreadableFiles);
+
     public NoteService NoteService => _noteService;
     public ProjectService ProjectService => _projectService;
     public SettingsService SettingsService => _settingsService;
@@ -221,6 +233,8 @@ public partial class MainViewModel : ObservableObject
         _cachedNotes = _noteService.LoadAll();
         _cachedProjects = _projectService.Load();
         LoadProjects(_cachedNotes);
+        OnPropertyChanged(nameof(UnreadableNotesMessage));
+        OnPropertyChanged(nameof(UnreadableNotesDetail));
         RefreshFromCache();
     }
 
@@ -379,10 +393,13 @@ public partial class MainViewModel : ObservableObject
 
         group.Move(sourceIndex, targetIndex);
 
+        // Write only the notes whose position changed, and leave their "updated"
+        // date alone: moving a note in a list is not editing it.
         for (int i = 0; i < group.Count; i++)
         {
+            if (group[i].Note.SortOrder == i) continue;
             group[i].Note.SortOrder = i;
-            _noteService.Save(group[i].Note);
+            _noteService.Save(group[i].Note, stampUpdated: false);
         }
     }
 

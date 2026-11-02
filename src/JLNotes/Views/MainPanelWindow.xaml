@@ -127,6 +127,7 @@
             <!-- Search Bar + Group Toggle -->
             <Border Grid.Row="1" Padding="8,6"
                     Background="{DynamicResource BgPrimaryBrush}">
+                <StackPanel>
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
@@ -191,6 +192,13 @@
                                       Padding="4,2" />
                     </StackPanel>
                 </Grid>
+                <!-- Only when a note file could not be read at all; the tooltip names them. -->
+                <TextBlock Text="{Binding UnreadableNotesMessage}"
+                           ToolTip="{Binding UnreadableNotesDetail}"
+                           Visibility="{Binding UnreadableNotesMessage, Converter={StaticResource NullToVisibility}}"
+                           Style="{StaticResource SecondaryText}"
+                           Margin="2,6,0,0" />
+                </StackPanel>
             </Border>
 
             <!-- Note area: single-column (list / grid) OR split (master-detail) -->
