@@ -15,7 +15,12 @@ public partial class MainViewModel : ObservableObject
     private readonly ProjectService _projectService;
     private readonly SettingsService _settingsService;
     private readonly ProjectCatalog _projects = new();
+    private readonly NoteIndex _links = new();
     private DispatcherTimer? _searchDebounce;
+    private DispatcherTimer? _noticeTimer;
+
+    // What the notice bar's button does; null when the bar is hidden.
+    private Action? _noticeAction;
 
     // The one list of notes: one view model per note, for as long as its file
     // exists. The collections below are filtered and sorted windows onto it.
@@ -64,6 +69,18 @@ public partial class MainViewModel : ObservableObject
 
     [ObservableProperty]
     private bool _isSelectMode;
+
+    /// <summary>The notice bar at the bottom of the panel (Deleted "Plan" / Undo,
+    /// or a save that wrote over an outside change); null hides the bar.</summary>
+    [ObservableProperty]
+    private string? _noticeText;
+
+    /// <summary>The notice bar's button text.</summary>
+    [ObservableProperty]
+    private string _noticeActionText = "";
+
+    /// <summary>How long the notice bar stays up.</summary>
+    private static readonly TimeSpan NoticeShownFor = TimeSpan.FromSeconds(15);
 
     // Split (master-detail) view: the note selected in the left rail, shown in
     // the right reading/edit pane.
@@ -195,6 +212,10 @@ public partial class MainViewModel : ObservableObject
             settingsService.Save(settings);
         }
 
+        _links.OpenRequested += ShowNote;
+        _noteService.OutsideChangeReplaced += note => ShowNotice(
+            $"“{note.Title}” was also changed outside the app. That version is kept.", "Earlier Versions",
+            () => _items.FirstOrDefault(v => SamePath(v.Note.FilePath, note.FilePath))?.ShowHistoryCommand.Execute(null));
         RefreshNotes();
 
         _noteService.NotesChanged += () =>
@@ -207,6 +228,8 @@ public partial class MainViewModel : ObservableObject
             _searchDebounce.Stop();
             UpdateWindows();
         };
+        _noticeTimer = new DispatcherTimer { Interval = NoticeShownFor };
+        _noticeTimer.Tick += (_, _) => ShowNotice(null);
     }
 
     /// <summary>Reads the notes folder again and brings the one list up to date.
@@ -216,6 +239,7 @@ public partial class MainViewModel : ObservableObject
     {
         var notes = _noteService.LoadAll();
         _projects.Refresh(_projectService.Load(), notes, SelectedProject);
+        _links.Refresh(notes);
         var subtitleDisplay = _settingsService.Load().SubtitleDisplay;
 
         var previous = _items.ToDictionary(vm => vm.Note.FilePath, StringComparer.OrdinalIgnoreCase);
@@ -240,9 +264,14 @@ public partial class MainViewModel : ObservableObject
 
     private NoteItemViewModel CreateItem(Note note)
     {
-        var vm = new NoteItemViewModel(note, _noteService, _settingsService, _projects) { IsSelectMode = IsSelectMode };
+        var vm = new NoteItemViewModel(note, _noteService, _settingsService, _projects, _links) { IsSelectMode = IsSelectMode };
         vm.NoteChanged += RefreshNotes;
-        vm.NoteDeleted += RefreshNotes;
+        vm.NoteDeleted += kept =>
+        {
+            if (kept != null)
+                ShowNotice($"Deleted “{kept.Read().Title}”", "Undo", () => RestoreDeleted(kept));
+            RefreshNotes();
+        };
         vm.DropReceived += HandleReorder;
         vm.PropertyChanged += (_, e) =>
         {
@@ -260,12 +289,7 @@ public partial class MainViewModel : ObservableObject
         var query = Helpers.NoteSearch.Parse(SearchText);
         var filtered = _items.Where(vm =>
             ProjectCatalog.PassesFilter(vm.Project, SelectedProject) &&
-            StatusFilter switch
-            {
-                "open" => vm.Note.Status != NoteStatus.Done,
-                "done" => vm.Note.Status == NoteStatus.Done,
-                _ => true
-            } &&
+            PassesStatusFilter(vm) &&
             Helpers.NoteSearch.Matches(vm.Note, query)
         ).ToList();
 
@@ -292,6 +316,13 @@ public partial class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(EmptyMessage));
         OnPropertyChanged(nameof(SelectedCount));
     }
+
+    private bool PassesStatusFilter(NoteItemViewModel vm) => StatusFilter switch
+    {
+        "open" => vm.Note.Status != NoteStatus.Done,
+        "done" => vm.Note.Status == NoteStatus.Done,
+        _ => true
+    };
 
     // A list card's editor lives in its row and cannot follow the note to another
     // one, so a note leaving a window saves and closes its card first.
@@ -480,21 +511,75 @@ public partial class MainViewModel : ObservableObject
             Project = SelectedProject == ProjectCatalog.AllProjects ? "" : SelectedProject,
         };
         _noteService.Save(note);
-
-        if (StatusFilter == "done") StatusFilter = "all";
-        if (!string.IsNullOrEmpty(SearchText))
-        {
-            SearchText = "";
-            _searchDebounce?.Stop(); // the refresh below covers it
-        }
         RefreshNotes();
 
-        var item = _items.First(v => v.Note.FilePath == note.FilePath);
+        var item = _items.First(v => SamePath(v.Note.FilePath, note.FilePath));
+        Reveal(item);
+        return item;
+    }
+
+    /// <summary>Brings a note up where the user is looking, as a link click does.</summary>
+    public void ShowNote(Note note)
+    {
+        if (_items.FirstOrDefault(v => SamePath(v.Note.FilePath, note.FilePath)) is { } item)
+            Reveal(item);
+    }
+
+    /// <summary>
+    /// The one way a note is brought into view (a new note, a link, an undo): any
+    /// filter that hides it is cleared, then it is selected in the split pane or
+    /// opened inline in the list/grid.
+    /// </summary>
+    private void Reveal(NoteItemViewModel item)
+    {
+        if (!ProjectCatalog.PassesFilter(item.Project, SelectedProject))
+            SelectedProject = ProjectCatalog.AllProjects;
+        if (!PassesStatusFilter(item))
+            StatusFilter = "all";
+        if (!Helpers.NoteSearch.Matches(item.Note, Helpers.NoteSearch.Parse(SearchText)))
+        {
+            SearchText = "";
+            _searchDebounce?.Stop(); // the update below covers it
+        }
+        UpdateWindows();
+
         if (IsSplitLayout)
             SelectedSplitNote = item;
         else
             item.Expand();
-        return item;
+    }
+
+    private static bool SamePath(string a, string b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Shows the notice bar for a while, or hides it (null text).</summary>
+    private void ShowNotice(string? text, string actionText = "", Action? action = null)
+    {
+        _noticeTimer?.Stop();
+        NoticeText = text;
+        NoticeActionText = actionText;
+        _noticeAction = action;
+        if (text != null)
+            _noticeTimer?.Start();
+    }
+
+    [RelayCommand]
+    private void NoticeAction()
+    {
+        var action = _noticeAction;
+        ShowNotice(null);
+        action?.Invoke();
+    }
+
+    [RelayCommand]
+    private void DismissNotice() => ShowNotice(null);
+
+    /// <summary>Brings a deleted note back (the undo bar, or the Deleted notes window) and shows it.</summary>
+    public void RestoreDeleted(NoteVersion kept)
+    {
+        _noteService.Restore(kept);
+        RefreshNotes();
+        if (_items.FirstOrDefault(v => SamePath(v.Note.FilePath, kept.NotePath)) is { } item)
+            Reveal(item);
     }
 
     partial void OnIsSelectModeChanged(bool value)

@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- jln.exe: the JL Notes command for Claude and other tools. A console front for
+       JLNotes.Cli.NoteCommands, which lives in the app so the note format, search and
+       history have one owner. Installed next to JLNotes.exe. (A different name than
+       the app's on purpose: Windows file names ignore case, so "jlnotes.exe" would
+       be the app itself.) -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>jln</AssemblyName>
+    <RootNamespace>JLNotes.Jln</RootNamespace>
+    <ApplicationIcon>..\JLNotes\tray.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\JLNotes\JLNotes.csproj" />
+  </ItemGroup>
+
+</Project>

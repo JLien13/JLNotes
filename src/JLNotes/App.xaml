@@ -34,9 +34,12 @@
                 <MenuItem Header="Open in Claude" Command="{Binding OpenInClaudeCommand}" />
                 <MenuItem Header="Export to Word" Command="{Binding ExportToWordCommand}" />
                 <Separator />
+                <MenuItem Header="Copy Link" Command="{Binding CopyLinkCommand}"
+                          ToolTip="Copies [[this note]]. Paste it into another note to link the two." />
                 <MenuItem Header="Copy Path" Command="{Binding CopyPathCommand}" />
                 <MenuItem Header="Reveal in Explorer" Command="{Binding RevealInExplorerCommand}" />
                 <Separator />
+                <MenuItem Header="Earlier Versions..." Command="{Binding ShowHistoryCommand}" />
                 <MenuItem Header="Delete" Command="{Binding DeleteCommand}" />
             </ContextMenu>
 
@@ -264,6 +267,7 @@
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
                     <!-- Title — editable in place, styled like the rendered title —
@@ -332,6 +336,29 @@
                     <RichTextBox Grid.Row="2" Margin="0,10,0,0"
                                  Style="{StaticResource InPlaceBodyBox}"
                                  behaviors:RichTextBoxBehavior.Document="{Binding EditDocument}" />
+
+                    <!-- Linked from: every other note with a [[link]] to this one
+                         (NoteIndex). Click a name to go to that note. -->
+                    <WrapPanel Grid.Row="3" Margin="0,8,0,0"
+                               Visibility="{Binding HasLinkedFrom, Converter={StaticResource BoolToVisibility}}">
+                        <TextBlock Text="Linked from:" Style="{StaticResource SecondaryText}"
+                                   FontSize="11" VerticalAlignment="Center" Margin="0,0,6,0" />
+                        <ItemsControl ItemsSource="{Binding LinkedFrom}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Button Content="{Binding Title}" Style="{StaticResource SubtleButton}"
+                                            FontSize="11" Padding="4,1" Margin="0,0,4,0"
+                                            Foreground="{DynamicResource AccentBlueBrush}"
+                                            ToolTip="Go to this note"
+                                            Command="{Binding DataContext.OpenNoteCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                            CommandParameter="{Binding}" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </WrapPanel>
                 </Grid>
             </DataTemplate>
         </ResourceDictionary>

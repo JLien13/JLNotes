@@ -16,7 +16,7 @@ public class NoteFileNameTests : IDisposable
     {
         _testDir = Path.Combine(Path.GetTempPath(), $"jlnotes-filename-{Guid.NewGuid()}");
         Directory.CreateDirectory(_testDir);
-        _service = new NoteService(_testDir);
+        _service = new NoteService(Path.Combine(_testDir, "notes")); // history and attachments land beside it, inside _testDir
     }
 
     public void Dispose()

@@ -153,6 +153,55 @@ public class LinkAndCheckboxTests
         });
     }
 
+    private static JLNotes.Services.NoteIndex IndexOf(params string[] fileNames)
+    {
+        var index = new JLNotes.Services.NoteIndex();
+        index.Refresh(fileNames.Select(f => new JLNotes.Models.Note { Title = f, FilePath = @"C:\notes\" + f + ".md" }).ToList());
+        return index;
+    }
+
+    [Fact]
+    public void NoteLink_BecomesHyperlink_AndRoundTripsUnchanged()
+    {
+        Sta(() =>
+        {
+            const string body = "see [[2026-01-02-b]] and [[2026-01-03-c|C]] plus https://example.com";
+            var doc = FlowDocumentHelper.BuildDocument(body, AttachDir, IndexOf("2026-01-02-b", "2026-01-03-c"));
+
+            Assert.Equal(3, HyperlinksOf(doc).Count);
+            Assert.Equal(body, FlowDocumentHelper.SerializeDocument(doc));
+        });
+    }
+
+    [Fact]
+    public void NoteLink_WithoutAnIndex_StaysText()
+    {
+        Sta(() =>
+        {
+            const string body = "see [[2026-01-02-b]]";
+            var doc = FlowDocumentHelper.BuildDocument(body, AttachDir);
+
+            Assert.Empty(HyperlinksOf(doc));
+            Assert.Equal(body, FlowDocumentHelper.SerializeDocument(doc));
+        });
+    }
+
+    [Fact]
+    public void NoteLink_Click_AsksForThatNote()
+    {
+        Sta(() =>
+        {
+            var index = IndexOf("2026-01-02-b");
+            var opened = new List<string>();
+            index.OpenRequested += n => opened.Add(n.Title);
+            var doc = FlowDocumentHelper.BuildDocument("[[2026-01-02-b]]", AttachDir, index);
+
+            HyperlinksOf(doc).Single().RaiseEvent(new System.Windows.RoutedEventArgs(Hyperlink.ClickEvent));
+
+            Assert.Equal(["2026-01-02-b"], opened);
+        });
+    }
+
     [Fact]
     public void UrlOnCheckboxLine_GetsBoth()
     {

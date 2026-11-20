@@ -62,6 +62,11 @@ public class Note
     /// record of its attachments; no list of them is kept anywhere else.</summary>
     internal static readonly Regex AttachmentToken = new(@"\{\{(.+?)\}\}", RegexOptions.Compiled);
 
+    /// <summary>The link grammar, Obsidian's: [[target]] or [[target|text]], where the
+    /// target is another note's file name. Like attachments, the body text is the only
+    /// record of a note's links; no list of them is kept anywhere else.</summary>
+    internal static readonly Regex LinkToken = new(@"\[\[([^\[\]|\r\n]+)(?:\|([^\[\]\r\n]*))?\]\]", RegexOptions.Compiled);
+
     // Text that YAML reads back exactly as written with no quotes around it.
     private static readonly Regex PlainText = new(@"^[A-Za-z0-9](?:[A-Za-z0-9 ,.'()/_+\-]*[A-Za-z0-9.)'])?$", RegexOptions.Compiled);
 
@@ -134,6 +139,15 @@ public class Note
     /// attachment depends on the file existing (FlowDocumentHelper.IsAttachment).</summary>
     public IEnumerable<string> GetAttachmentTokens() =>
         AttachmentToken.Matches(Body).Select(m => m.Groups[1].Value);
+
+    /// <summary>What the [[...]] links in the body point at. Which note each one
+    /// means is NoteIndex.Resolve's answer.</summary>
+    public IEnumerable<string> GetLinkTargets() =>
+        LinkToken.Matches(Body).Select(m => m.Groups[1].Value.Trim()).Where(t => t.Length > 0);
+
+    /// <summary>How another note links to this one: its file name, which never
+    /// changes after the note is made, so the link survives a new title.</summary>
+    public string GetLinkText() => $"[[{Path.GetFileNameWithoutExtension(FilePath)}]]";
 
     public string GenerateFileName()
     {

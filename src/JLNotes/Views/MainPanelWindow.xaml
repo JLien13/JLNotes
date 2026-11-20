@@ -322,9 +322,36 @@
             </Grid>
             </Grid>
 
+            <StackPanel Grid.Row="3">
+            <!-- Notice bar: shown for a while after a note is deleted (Undo), or after
+                 a save wrote over a change made outside the app (Earlier Versions). -->
+            <Border Padding="12,8"
+                    Background="{DynamicResource BgSecondaryBrush}"
+                    BorderBrush="{DynamicResource BorderSubtleBrush}"
+                    BorderThickness="0,1,0,0"
+                    Visibility="{Binding NoticeText, Converter={StaticResource NullToVisibility}}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="{Binding NoticeText}"
+                               Style="{StaticResource SecondaryText}"
+                               TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                    <Button Grid.Column="1" Content="{Binding NoticeActionText}"
+                            Style="{StaticResource SubtleButton}" FontSize="12"
+                            Foreground="{DynamicResource AccentBlueBrush}"
+                            Command="{Binding NoticeActionCommand}" />
+                    <Button Grid.Column="2" Content="x"
+                            Style="{StaticResource SubtleButton}"
+                            Margin="6,0,0,0" ToolTip="Dismiss"
+                            Command="{Binding DismissNoticeCommand}" />
+                </Grid>
+            </Border>
+
             <!-- Selection Action Bar -->
-            <Border Grid.Row="3"
-                    Padding="12,8"
+            <Border Padding="12,8"
                     Background="{DynamicResource BgSecondaryBrush}"
                     BorderBrush="{DynamicResource BorderSubtleBrush}"
                     BorderThickness="0,1,0,0"
@@ -347,6 +374,7 @@
                             Command="{Binding ExportSelectedCommand}" />
                 </Grid>
             </Border>
+            </StackPanel>
         </Grid>
     </Border>
 </Window>
