@@ -217,4 +217,46 @@ public class NoteCommandsTests : IDisposable
             Assert.DoesNotContain("   at ", err);
         }
     }
+
+    [Fact]
+    public void Where_PrintsTheNotesFolder()
+    {
+        // Tools that read note files themselves ask jln where they are, so moving the
+        // notes to a shared folder in Settings never leaves them looking in the old place.
+        var (code, output, _) = Jln("where");
+
+        Assert.Equal(0, code);
+        Assert.Equal(_root, output);
+    }
+
+    [Fact]
+    public void Find_NeverListsASyncToolsConflictedCopyAsANote()
+    {
+        var (_, path, _) = Jln("new", "--title", "Plan", "--body", "from A");
+        var copy = Path.Combine(_notesDir, Path.GetFileNameWithoutExtension(path) + " (JL's conflicted copy 2026-11-20).md");
+        File.WriteAllText(copy, File.ReadAllText(path).Replace("from A", "from B"));
+
+        var (_, output, _) = Jln("find");
+
+        Assert.Single(output.Split('\n', StringSplitOptions.RemoveEmptyEntries));
+    }
+
+    [Fact]
+    public void Restore_BringsBackADeletedNoteThatOnlyHasAWaitingVersion()
+    {
+        // Deleted on another PC while this one held its other version: "deleted" lists
+        // it, so "restore" must find it too.
+        var conflicts = Path.Combine(_root, "conflicts", "2026-11-20-plan");
+        Directory.CreateDirectory(conflicts);
+        File.WriteAllText(Path.Combine(conflicts, "2026-11-20_10-00-00-000.md"),
+            new Note { Title = "Plan", Body = "held", Created = new DateTime(2026, 11, 20, 9, 0, 0) }.ToMarkdown());
+        Assert.Contains("2026-11-20-plan", Jln("deleted").Out);
+
+        var (code, _, err) = Jln("restore", "2026-11-20-plan");
+
+        Assert.Equal(0, code);
+        Assert.Equal("", err);
+        Assert.Equal("held", Read(Path.Combine(_notesDir, "2026-11-20-plan.md")).Body);
+    }
+
 }

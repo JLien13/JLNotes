@@ -26,14 +26,26 @@ public static class NoteCommands
         jln history <note>
         jln deleted
         jln restore <note> [version]
+        jln where
 
         <note> is a note's file name, with or without .md, or without its date when
         only one note has that name. A value of - is read from input.
+        "where" prints the notes folder (the note files are in its "notes" folder).
         """;
 
-    /// <summary>The installed jln.exe: the real notes folder and the console.</summary>
-    public static int Run(string[] args) =>
-        Run(args, AppPaths.NotesDir, Console.In, Console.Out, Console.Error);
+    /// <summary>The installed jln.exe: the real notes folder and the console. A notes
+    /// folder picked in Settings that cannot be found is an error, never made again empty
+    /// (the app refuses the same way).</summary>
+    public static int Run(string[] args)
+    {
+        var dataDir = NotesFolder.DataDirFor(AppPaths.LocalDir);
+        if (NotesFolder.MissingFolderProblem(dataDir, AppPaths.LocalDir) is { } problem)
+        {
+            Console.Error.WriteLine(problem);
+            return 1;
+        }
+        return Run(args, AppPaths.NotesDirIn(dataDir), Console.In, Console.Out, Console.Error);
+    }
 
     public static int Run(string[] args, string notesDir, TextReader input, TextWriter output, TextWriter error)
     {
@@ -58,6 +70,7 @@ public static class NoteCommands
                 case "history": History(notes, options, output); break;
                 case "deleted": Deleted(notes, output); break;
                 case "restore": Restore(notes, options, output); break;
+                case "where": output.WriteLine(notes.DataDir); break;
                 default:
                     error.WriteLine($"Unknown command \"{args[0]}\".");
                     error.WriteLine(Usage);
@@ -179,7 +192,9 @@ public static class NoteCommands
         var versions = notes.GetVersions(path);
         var wanted = options.Positional.ElementAtOrDefault(1);
         var version = wanted == null
-            ? versions.FirstOrDefault() ?? throw new CommandError("That note has no earlier versions.")
+            ? versions.FirstOrDefault()
+              ?? notes.GetDeleted().FirstOrDefault(v => string.Equals(v.NotePath, path, StringComparison.OrdinalIgnoreCase))
+              ?? throw new CommandError("That note has no earlier versions.")
             : versions.FirstOrDefault(v => Path.GetFileNameWithoutExtension(v.VersionPath) == wanted)
               ?? throw new CommandError($"No version \"{wanted}\". See: jln history {options.Positional[0]}");
         notes.Restore(version);

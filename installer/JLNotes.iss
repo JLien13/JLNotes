@@ -5,6 +5,8 @@
 ; there are deliberately no HIPAA / drive-encryption / data-handling gates here.
 ; Notes live in %USERPROFILE%\.jlnotes and are treated as the user's documents:
 ; never touched on install, preserved on uninstall unless the user opts out.
+; A notes folder picked in Settings (a Dropbox folder shared by several PCs) is
+; never touched by install or uninstall at all; only this PC's own folder is.
 ;
 ; The wizard chrome (modern style, branded top-right image, fresh / upgrade /
 ; repair / downgrade detection, disk precheck, kill-the-running-tray-app before
@@ -83,7 +85,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 ; Friendlier wording than Inno's stock strings.
 SelectDirDesc=Choose where {#MyAppName} should be installed, then click Next.
 ReadyLabel1=Setup is ready to install {#MyAppName} on your computer.
-ReadyLabel2a=Click Install to continue. Your existing notes in your user folder are never touched.
+ReadyLabel2a=Click Install to continue. Your existing notes are never touched.
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription: "Additional shortcuts:"
@@ -429,7 +431,7 @@ begin
         '   -  Install JL Notes to your user Program Files (no admin needed)' + #13#10 +
         '   -  Add Start Menu, and optional desktop / start-up shortcuts' + #13#10 +
         '   -  Fetch the .NET 10 Desktop Runtime automatically if it is missing' + #13#10 + #13#10 +
-        'Your existing notes (in your user folder) are never touched.' + #13#10 + #13#10 +
+        'Your existing notes are never touched.' + #13#10 + #13#10 +
         'Click Next to continue, or Cancel to exit.';
     end
     else if IsRepair then
@@ -470,8 +472,8 @@ begin
       WizardForm.FinishedLabel.Caption :=
         '{#MyAppName} {#MyAppVersion} has been installed.' + #13#10 + #13#10 +
         'Look for the JL Notes icon in your system tray (bottom-right of the taskbar). ' +
-        'Click it to open the notes panel. Notes you create are saved as markdown in ' +
-        'your user folder, where Claude Code can pick them up.';
+        'Click it to open the notes panel. Notes you create are saved as markdown files ' +
+        'that Claude Code can pick up, in your user folder unless Settings moves them.';
     end
     else if IsUpgrade then
     begin
@@ -512,10 +514,11 @@ begin
   if DirExists(NotesDir) and not UninstallSilent then
   begin
     Prompt :=
-      'Also delete your JL Notes notes from this PC?' + #13#10 + #13#10 +
-      'They live in:' + #13#10 +
+      'Also delete JL Notes'' folder on this PC?' + #13#10 + #13#10 +
       '    ' + NotesDir + #13#10 + #13#10 +
-      'Click No to keep them (recommended) so a reinstall picks up right where you left off.';
+      'It holds this PC''s settings and the notes kept on this PC. Notes in a folder picked ' +
+      'in Settings (a Dropbox folder, say) are never deleted here.' + #13#10 + #13#10 +
+      'Click No to keep it (recommended) so a reinstall picks up right where you left off.';
     WipeNotes := (MsgBox(Prompt, mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES);
   end;
   Result := True;

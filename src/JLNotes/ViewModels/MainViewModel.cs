@@ -17,6 +17,16 @@ public partial class MainViewModel : ObservableObject
     private readonly ProjectCatalog _projects = new();
     private readonly NoteIndex _links = new();
     private DispatcherTimer? _searchDebounce;
+    private DispatcherTimer? _refreshDebounce;
+    private DateTime? _refreshPendingSince;
+    private bool _refreshing;
+
+    // Folder changes arriving within this long make one refresh. A sync tool bringing
+    // in many notes at once (another PC's changes) would otherwise reload every note
+    // once per file.
+    private static readonly TimeSpan RefreshAfterQuiet = TimeSpan.FromMilliseconds(300);
+    // ...but a long burst still shows what has arrived at least this often.
+    private static readonly TimeSpan RefreshAtLeastEvery = TimeSpan.FromSeconds(2);
     private DispatcherTimer? _noticeTimer;
 
     // What the notice bar's button does; null when the bar is hidden.
@@ -213,13 +223,28 @@ public partial class MainViewModel : ObservableObject
         }
 
         _links.OpenRequested += ShowNote;
-        _noteService.OutsideChangeReplaced += note => ShowNotice(
-            $"“{note.Title}” was also changed outside the app. That version is kept.", "Earlier Versions",
-            () => _items.FirstOrDefault(v => SamePath(v.Note.FilePath, note.FilePath))?.ShowHistoryCommand.Execute(null));
+        _noteService.ClashFound += note => ShowNotice(
+            $"“{note.Title}” was also changed somewhere else. Both versions are kept.", "Choose",
+            () =>
+            {
+                if (_items.FirstOrDefault(v => SamePath(v.Note.FilePath, note.FilePath)) is not { } item) return;
+                Reveal(item);
+                item.ChooseVersionCommand.Execute(null);
+            });
         RefreshNotes();
 
+        _refreshDebounce = new DispatcherTimer { Interval = RefreshAfterQuiet };
+        _refreshDebounce.Tick += (_, _) => RefreshAfterChanges();
         _noteService.NotesChanged += () =>
-            System.Windows.Application.Current?.Dispatcher.Invoke(RefreshNotes);
+            System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
+            {
+                _refreshPendingSince ??= DateTime.UtcNow;
+                _refreshDebounce.Stop(); // restart: refresh once things go quiet
+                if (DateTime.UtcNow - _refreshPendingSince >= RefreshAtLeastEvery)
+                    RefreshAfterChanges();
+                else
+                    _refreshDebounce.Start();
+            });
         _noteService.StartWatching();
 
         _searchDebounce = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
@@ -242,10 +267,15 @@ public partial class MainViewModel : ObservableObject
         _links.Refresh(notes);
         var subtitleDisplay = _settingsService.Load().SubtitleDisplay;
 
-        var previous = _items.ToDictionary(vm => vm.Note.FilePath, StringComparer.OrdinalIgnoreCase);
+        // One row per file. A second one on the same file (typing that could not be kept
+        // as its own note last time) is handled with the gone ones below and tried again.
+        var previous = new Dictionary<string, NoteItemViewModel>(StringComparer.OrdinalIgnoreCase);
+        var extra = _items.Where(vm => !previous.TryAdd(vm.Note.FilePath, vm)).ToList();
+        var matched = MatchItems(notes, previous);
+        var selectedBefore = SelectedSplitNote;
         _items = notes.Select(note =>
         {
-            if (!previous.Remove(note.FilePath, out var vm))
+            if (!matched.TryGetValue(note, out var vm))
                 return CreateItem(note);
             vm.Reload(note);
             return vm;
@@ -253,13 +283,97 @@ public partial class MainViewModel : ObservableObject
         foreach (var vm in _items)
             vm.SubtitleDisplay = subtitleDisplay;
 
-        // Their files are gone, and saving their editors would bring them back.
-        foreach (var gone in previous.Values)
-            gone.CancelEditsCommand.Execute(null);
+        // A note whose file is there but could not be read just now (the sync tool has it
+        // open) is not gone: one open in an editor stays as it was, typing and all, and the
+        // next refresh reads it; others drop out of the list until then, as reported.
+        // Only a note whose file is really gone has its unsaved typing kept as a new note
+        // (saving its editor as it is would bring the deleted file back).
+        // A note whose file now holds a different note (another PC's with the same name,
+        // shown by its own row) is handled like a gone one: its typing becomes its own note.
+        var rescued = new List<(Note Note, string WasTitled, bool Replaced, bool WasOpen)>();
+        foreach (var gone in previous.Values.Concat(extra))
+        {
+            var replaced = _items.Any(vm => SamePath(vm.Note.FilePath, gone.Note.FilePath));
+            if (System.IO.File.Exists(gone.Note.FilePath) && !replaced)
+            {
+                if (gone.HasOpenEditor)
+                    _items.Add(gone);
+                else
+                    gone.CancelEditsCommand.Execute(null);
+                continue;
+            }
+            try
+            {
+                var wasTitled = gone.Note.Title;
+                if (gone.KeepUnsavedAsNewNote() is { } kept)
+                    rescued.Add((kept, wasTitled, replaced, gone == selectedBefore));
+            }
+            catch (Exception e) when (e is System.IO.IOException or UnauthorizedAccessException)
+            {
+                _items.Add(gone); // could not be written now: keep the typing on screen
+            }
+        }
+
+        // The open note stays open even when its file took a new name.
+        if (SelectedSplitNote is { } selected && _items.Contains(selected))
+            _splitSelectionPath = selected.Note.FilePath;
 
         OnPropertyChanged(nameof(UnreadableNotesMessage));
         OnPropertyChanged(nameof(UnreadableNotesDetail));
-        UpdateWindows();
+        _refreshing = true;
+        try { UpdateWindows(); }
+        finally { _refreshing = false; }
+
+        if (rescued.Count > 0)
+        {
+            RefreshNotes();
+            var (first, wasTitled, replaced, wasOpen) = rescued[0];
+            if (wasOpen)
+                ShowNote(first);
+            var more = rescued.Count > 1 ? $" {rescued.Count - 1} more were kept the same way." : "";
+            ShowNotice((replaced
+                    ? $"“{wasTitled}” was replaced somewhere else by a different note with the same name while you were typing in it. What you typed is kept as a note of its own."
+                    : $"“{wasTitled}” was deleted somewhere else while you were typing in it. What you typed is kept as a new note.") + more,
+                "Show", () => ShowNote(first));
+        }
+    }
+
+    private void RefreshAfterChanges()
+    {
+        _refreshDebounce?.Stop();
+        _refreshPendingSince = null;
+        RefreshNotes();
+    }
+
+    /// <summary>
+    /// Which view model each note keeps, so its row, selection and open editor carry on:
+    /// the one showing its file, unless that file now holds a different note
+    /// (<see cref="Note.AreSameNote"/>); otherwise, for a note whose file took a new name
+    /// (a sync tool gave it a conflicted-copy name because another PC made a note with the
+    /// same name), the one that surely showed it under its old name. Matched view models
+    /// are taken out of <paramref name="previous"/>, which is left holding the ones whose
+    /// note is gone.
+    /// </summary>
+    private static Dictionary<Note, NoteItemViewModel> MatchItems(List<Note> notes, Dictionary<string, NoteItemViewModel> previous)
+    {
+        var kept = new Dictionary<Note, NoteItemViewModel>();
+        foreach (var note in notes)
+        {
+            if (previous.TryGetValue(note.FilePath, out var vm) && Note.AreSameNote(vm.Note, note) != false)
+            {
+                kept[note] = vm;
+                previous.Remove(note.FilePath);
+            }
+        }
+        foreach (var (path, vm) in previous.ToList())
+        {
+            if (notes.Where(n => !kept.ContainsKey(n) && Note.AreSameNote(n, vm.Note) == true).ToList() is [var moved])
+            {
+                kept[moved] = vm;
+                previous.Remove(path);
+            }
+        }
+        return kept;
     }
 
     private NoteItemViewModel CreateItem(Note note)
@@ -484,6 +598,10 @@ public partial class MainViewModel : ObservableObject
         newValue?.LoadEditor();
         if (newValue != null)
             _splitSelectionPath = newValue.Note.FilePath;
+        // Opening a note asks about a second version; a refresh moving the selection
+        // (or the first note being picked at start) does not.
+        if (!_refreshing)
+            newValue?.AskIfClash();
     }
 
     /// <summary>Flush the split detail pane to disk. Safe to call anytime; it does

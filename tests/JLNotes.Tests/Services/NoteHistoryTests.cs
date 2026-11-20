@@ -196,13 +196,14 @@ public class NoteHistoryTests : IDisposable
         var note = SaveNew("mine");
         File.WriteAllText(note.FilePath, File.ReadAllText(note.FilePath).Replace("mine", "theirs"));
         var reported = new List<string>();
-        _service.OutsideChangeReplaced += n => reported.Add(n.FilePath);
+        _service.ClashFound += n => reported.Add(n.FilePath);
 
         note.Body = "mine, edited";
         _service.Save(note);
 
         Assert.Equal([note.FilePath], reported);
         Assert.Equal("theirs", BodyOf(_service.GetVersions(note.FilePath)[0]));
+        Assert.Equal("theirs", BodyOf(Assert.Single(_service.GetClashes(note.FilePath))));
     }
 
     [Fact]
@@ -210,7 +211,7 @@ public class NoteHistoryTests : IDisposable
     {
         var note = SaveNew("one");
         var reported = 0;
-        _service.OutsideChangeReplaced += _ => reported++;
+        _service.ClashFound += _ => reported++;
 
         note.Body = "two";
         _service.Save(note);

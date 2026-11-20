@@ -49,6 +49,18 @@ public class AppSettings
     // 0 (older json, or never saved) = keep the XAML default.
     [JsonPropertyName("splitListWidth")]
     public double SplitListWidth { get; set; }
+
+    // Where this PC keeps its notes, pictures, history and projects (Settings > Notes
+    // folder). Empty = this PC's own .jlnotes folder. Several PCs pointed at one
+    // Dropbox folder share their notes. These settings themselves never move: window
+    // places differ per PC. NotesFolder.DataDirFor is the one reader of this value.
+    [JsonPropertyName("notesFolder")]
+    public string NotesFolder { get; set; } = "";
+
+    // The notes folder that could not be found at a start, when this PC's own folder was
+    // used instead: once it is back, the app offers to go back to it. Empty otherwise.
+    [JsonPropertyName("notesFolderAway")]
+    public string NotesFolderAway { get; set; } = "";
 }
 
 public class WindowPosition

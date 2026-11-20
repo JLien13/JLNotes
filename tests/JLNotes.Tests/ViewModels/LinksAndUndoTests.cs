@@ -142,8 +142,8 @@ public class LinksAndUndoTests : IDisposable
     [Fact]
     public void ASave_OverAChangeMadeOutsideTheApp_SaysSo()
     {
-        // JL has the note open and is typing when Claude changes the file. His save
-        // wins, the other version is kept, and the app tells him.
+        // JL has the note open and is typing when Claude (or another PC) changes the
+        // file. His save lands, the other version is held, and the app asks which to keep.
         var note = Saved("Plan", "mine");
         var vm = Vm("split");
         var item = Item(vm, note);
@@ -153,7 +153,8 @@ public class LinksAndUndoTests : IDisposable
         item.EditTitle = "Plan v2";
         item.SaveEditor();
 
-        Assert.Contains("changed outside the app", vm.NoticeText);
-        Assert.Equal("Earlier Versions", vm.NoticeActionText);
+        Assert.Contains("Both versions are kept", vm.NoticeText);
+        Assert.Equal("Choose", vm.NoticeActionText);
+        Assert.True(item.HasClash);
     }
 }
