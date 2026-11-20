@@ -21,6 +21,12 @@ internal static class AppPaths
     public static string NotesDir { get; } = Path.Combine(BaseDir, "notes");
 
     /// <summary>Attachments root: the <c>attachments</c> folder beside a notes folder.</summary>
-    public static string AttachmentsRootFor(string notesDir) =>
-        Path.Combine(Path.GetDirectoryName(notesDir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))!, "attachments");
+    public static string AttachmentsRootFor(string notesDir) => Beside(notesDir, "attachments");
+
+    /// <summary>History root: the <c>history</c> folder beside a notes folder, one
+    /// subfolder per note, named after the note's file.</summary>
+    public static string HistoryRootFor(string notesDir) => Beside(notesDir, "history");
+
+    private static string Beside(string notesDir, string name) =>
+        Path.Combine(Path.GetDirectoryName(notesDir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))!, name);
 }

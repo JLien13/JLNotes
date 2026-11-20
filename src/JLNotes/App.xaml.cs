@@ -287,6 +287,17 @@ public partial class App : Application
         }
     }
 
+    /// <summary>Tray > Deleted Notes: pick a deleted note and put it back. The panel
+    /// comes up so the restored note shows where it is selected.</summary>
+    private void ShowDeletedNotes()
+    {
+        if (_mainPanel?.DataContext is not MainViewModel vm) return;
+        _mainPanel.Show();
+        _mainPanel.Activate();
+        new HistoryWindow("Deleted notes", vm.NoteService.GetDeleted(), vm.RestoreDeleted) { Owner = _mainPanel }
+            .ShowDialog();
+    }
+
     private System.Windows.Controls.ContextMenu CreateTrayMenu()
     {
         var menu = new System.Windows.Controls.ContextMenu();
@@ -294,6 +305,10 @@ public partial class App : Application
         var openItem = new System.Windows.Controls.MenuItem { Header = "Open Panel" };
         openItem.Click += (_, _) => TogglePanel();
         menu.Items.Add(openItem);
+
+        var deletedItem = new System.Windows.Controls.MenuItem { Header = "Deleted Notes..." };
+        deletedItem.Click += (_, _) => ShowDeletedNotes();
+        menu.Items.Add(deletedItem);
 
         menu.Items.Add(new System.Windows.Controls.Separator());
 

@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/JLNotes/JLNotes.csproj" />
+    <Project Path="src/jln/jln.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/JLNotes.Tests/JLNotes.Tests.csproj" />

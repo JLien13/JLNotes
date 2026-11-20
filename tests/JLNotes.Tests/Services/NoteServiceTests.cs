@@ -13,7 +13,7 @@ public class NoteServiceTests : IDisposable
     {
         _testDir = Path.Combine(Path.GetTempPath(), $"claude-notes-test-{Guid.NewGuid()}");
         Directory.CreateDirectory(_testDir);
-        _service = new NoteService(_testDir);
+        _service = new NoteService(Path.Combine(_testDir, "notes")); // history and attachments land beside it, inside _testDir
     }
 
     public void Dispose()
@@ -86,7 +86,7 @@ public class NoteServiceTests : IDisposable
         _service.NotesChanged += () => raised = true;
         _service.StartWatching();
 
-        var path = Path.Combine(_testDir, "new-note.md");
+        var path = Path.Combine(_testDir, "notes", "new-note.md");
         File.WriteAllText(path, """
             ---
             title: External note

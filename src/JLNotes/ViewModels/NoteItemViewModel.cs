@@ -15,6 +15,7 @@ public partial class NoteItemViewModel : ObservableObject
     private readonly NoteService _noteService;
     private readonly SettingsService _settingsService;
     private readonly ProjectCatalog _projects;
+    private readonly NoteIndex _links;
 
     [ObservableProperty] private bool _isExpanded;
     [ObservableProperty] private string _editTitle = "";
@@ -35,12 +36,16 @@ public partial class NoteItemViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(ShowSubtitleText))]
     private string _subtitleDisplay = "project";
 
-    public NoteItemViewModel(Note note, NoteService noteService, SettingsService settingsService, ProjectCatalog projects)
+    /// <param name="links">The main view's index of notes, which draws [[note]] links
+    /// and answers "linked from". Without one (some tests) a note links nowhere.</param>
+    public NoteItemViewModel(Note note, NoteService noteService, SettingsService settingsService, ProjectCatalog projects,
+        NoteIndex? links = null)
     {
         _note = note;
         _noteService = noteService;
         _settingsService = settingsService;
         _projects = projects;
+        _links = links ?? new NoteIndex();
     }
 
     public Note Note => _note;
@@ -70,6 +75,10 @@ public partial class NoteItemViewModel : ObservableObject
 
     public bool HasTags => Tags.Count > 0;
 
+    /// <summary>Other notes with a [[link]] to this one.</summary>
+    public IReadOnlyList<Note> LinkedFrom => _links.LinkedFrom(_note);
+    public bool HasLinkedFrom => LinkedFrom.Count > 0;
+
     public string SubtitleText => SubtitleDisplay switch
     {
         "repo" => Repo,
@@ -94,7 +103,8 @@ public partial class NoteItemViewModel : ObservableObject
     public string StatusMenuText => IsDone ? "Mark Open" : "Mark Done";
 
     public event Action? NoteChanged;
-    public event Action? NoteDeleted;
+    /// <summary>Carries the version history kept, which is what undo puts back.</summary>
+    public event Action<NoteVersion?>? NoteDeleted;
     public event Action<NoteItemViewModel, NoteItemViewModel>? DropReceived;
 
     public Brush ProjectColorBrush => _projects.BrushOf(Project) ?? Brushes.Transparent;
@@ -186,7 +196,7 @@ public partial class NoteItemViewModel : ObservableObject
         EditTags = FormatTags(_note.Tags);
         IsEditingTags = false;
         OnPropertyChanged(nameof(SplitProjectChoice));
-        EditDocument = FlowDocumentHelper.BuildDocument(_note.Body, AttachmentsDir);
+        EditDocument = FlowDocumentHelper.BuildDocument(_note.Body, AttachmentsDir, _links);
         _editorBaseline = FlowDocumentHelper.SerializeDocument(EditDocument);
     }
 
@@ -249,6 +259,8 @@ public partial class NoteItemViewModel : ObservableObject
         OnPropertyChanged(nameof(TimeAgo));
         OnPropertyChanged(nameof(IsDone));
         OnPropertyChanged(nameof(StatusMenuText));
+        OnPropertyChanged(nameof(LinkedFrom));
+        OnPropertyChanged(nameof(HasLinkedFrom));
     }
 
     /// <summary>The one tag parser: comma-separated text to a trimmed,
@@ -307,8 +319,39 @@ public partial class NoteItemViewModel : ObservableObject
                 return;
         }
         CancelEdits(); // nothing may save this note back after it is gone
-        _noteService.Delete(_note);
-        NoteDeleted?.Invoke();
+        var kept = _noteService.Delete(_note);
+        NoteDeleted?.Invoke(kept);
+    }
+
+    /// <summary>A name in the "Linked from" list was clicked.</summary>
+    [RelayCommand]
+    private void OpenNote(Note note) => _links.RequestOpen(note.FilePath);
+
+    /// <summary>Puts an earlier version back. What is on screen is saved first, so
+    /// it is kept in history too and the restore can itself be undone.</summary>
+    public void RestoreVersion(NoteVersion version)
+    {
+        SaveEditor();
+        _noteService.Restore(version);
+        NoteChanged?.Invoke();
+    }
+
+    [RelayCommand]
+    private void ShowHistory()
+    {
+        SaveEditor();
+        var window = new Views.HistoryWindow($"Earlier versions of “{Title}”",
+            _noteService.GetVersions(_note.FilePath), RestoreVersion)
+        {
+            Owner = System.Windows.Application.Current?.MainWindow is { IsVisible: true } main ? main : null
+        };
+        window.ShowDialog();
+    }
+
+    [RelayCommand]
+    private void CopyLink()
+    {
+        try { System.Windows.Clipboard.SetText(_note.GetLinkText()); } catch { /* clipboard contention */ }
     }
 
     [RelayCommand]

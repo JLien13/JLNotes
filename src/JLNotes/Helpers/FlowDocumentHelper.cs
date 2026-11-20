@@ -23,6 +23,7 @@ public static class FlowDocumentHelper
     private const string TextPrimaryBrushKey = "TextPrimaryBrush";
     private const string AccentBlueBrushKey = "AccentBlueBrush";
     private const string BorderSubtleBrushKey = "BorderSubtleBrush";
+    private const string TextMutedBrushKey = "TextMutedBrush";
 
     private static readonly HashSet<string> ImageExtensions = new(StringComparer.OrdinalIgnoreCase)
         { ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp" };
@@ -43,7 +44,9 @@ public static class FlowDocumentHelper
     private const double ThumbMaxHeight = 220;
     private const int ThumbDecodeWidth = 900;
 
-    public static FlowDocument BuildDocument(string bodyText, string attachmentsDir)
+    /// <param name="links">Turns [[note]] links into links that open their note.
+    /// Without it they stay plain text (Word export, tests).</param>
+    public static FlowDocument BuildDocument(string bodyText, string attachmentsDir, Services.NoteIndex? links = null)
     {
         var doc = new FlowDocument
         {
@@ -90,7 +93,7 @@ public static class FlowDocumentHelper
 
                     if (textLines[j].Length > 0)
                     {
-                        AddTextLine(currentParagraph, textLines[j]);
+                        AddTextLine(currentParagraph, textLines[j], links);
                     }
                 }
             }
@@ -200,8 +203,9 @@ public static class FlowDocumentHelper
     }
 
     /// <summary>One text line into a paragraph: a leading "- [ ]"/"- [x]" becomes a
-    /// live checkbox (only at true line start), and URLs become Ctrl+Click hyperlinks.</summary>
-    private static void AddTextLine(Paragraph paragraph, string text)
+    /// live checkbox (only at true line start), and URLs and [[note]] links become
+    /// Ctrl+Click hyperlinks.</summary>
+    private static void AddTextLine(Paragraph paragraph, string text, Services.NoteIndex? links)
     {
         if (paragraph.Inlines.Count == 0)
         {
@@ -213,7 +217,40 @@ public static class FlowDocumentHelper
                 text = text[m.Length..];
             }
         }
-        AddTextWithLinks(paragraph, text);
+        AddTextWithNoteLinks(paragraph, text, links);
+    }
+
+    /// <summary>[[note]] links, then URLs in the text between them. A note link keeps
+    /// its exact text, so saving writes it back unchanged.</summary>
+    private static void AddTextWithNoteLinks(Paragraph paragraph, string text, Services.NoteIndex? links)
+    {
+        if (links == null)
+        {
+            AddTextWithLinks(paragraph, text);
+            return;
+        }
+
+        var pos = 0;
+        foreach (Match m in Models.Note.LinkToken.Matches(text))
+        {
+            AddTextWithLinks(paragraph, text[pos..m.Index]);
+            paragraph.Inlines.Add(CreateNoteLink(m.Value, m.Groups[1].Value.Trim(), links));
+            pos = m.Index + m.Length;
+        }
+        AddTextWithLinks(paragraph, text[pos..]);
+    }
+
+    private static Hyperlink CreateNoteLink(string text, string target, Services.NoteIndex links)
+    {
+        var note = links.Resolve(target);
+        var link = new Hyperlink(new Run(text))
+        {
+            ToolTip = note != null ? note.Title + Environment.NewLine + "Ctrl+Click to open" : $"No note named \"{target}\"",
+            Cursor = Cursors.Hand
+        };
+        link.SetResourceReference(TextElement.ForegroundProperty, note != null ? AccentBlueBrushKey : TextMutedBrushKey);
+        link.Click += (_, _) => links.RequestOpen(target);
+        return link;
     }
 
     private static InlineUIContainer CreateCheckboxInline(string indent, bool isChecked)

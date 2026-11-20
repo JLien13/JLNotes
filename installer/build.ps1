@@ -1,7 +1,7 @@
 # installer/build.ps1 -- JL Notes installer builder.
 #
 # Two phases:
-#   1. dotnet publish -> publish\  (framework-dependent, win-x64)
+#   1. dotnet publish -> publish\  (the app and jln.exe; framework-dependent, win-x64)
 #   2. ISCC.exe       -> installer\Output\JLNotes-Setup-<version>.exe
 #
 # Version is the single source of truth in src\JLNotes\JLNotes.csproj (<Version>);
@@ -31,6 +31,7 @@ Set-StrictMode -Version Latest
 
 $RepoRoot  = Split-Path -Parent $PSScriptRoot
 $Csproj    = Join-Path $RepoRoot "src\JLNotes\JLNotes.csproj"
+$JlnCsproj = Join-Path $RepoRoot "src\jln\jln.csproj"
 $PublishDir = Join-Path $RepoRoot "publish"
 $Iss       = Join-Path $PSScriptRoot "JLNotes.iss"
 
@@ -47,11 +48,16 @@ if (-not $SkipPublish) {
     Write-Host "==> dotnet publish" -ForegroundColor Cyan
     & dotnet publish $Csproj -c Release -r win-x64 --self-contained false -o $PublishDir
     if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed (exit $LASTEXITCODE)" }
+    # jln.exe, the notes command for Claude and other tools, ships beside the app.
+    & dotnet publish $JlnCsproj -c Release -r win-x64 --self-contained false -o $PublishDir
+    if ($LASTEXITCODE -ne 0) { throw "dotnet publish of jln failed (exit $LASTEXITCODE)" }
 } else {
     Write-Host "==> Skipping publish (per -SkipPublish)" -ForegroundColor DarkGray
 }
-if (-not (Test-Path (Join-Path $PublishDir "JLNotes.exe"))) {
-    throw "publish\JLNotes.exe not found. Run a publish first (drop -SkipPublish)."
+foreach ($exe in "JLNotes.exe", "jln.exe") {
+    if (-not (Test-Path (Join-Path $PublishDir $exe))) {
+        throw "publish\$exe not found. Run a publish first (drop -SkipPublish)."
+    }
 }
 
 # Phase 2: ISCC. This PC keeps Inno Setup as a per-user install under LOCALAPPDATA.

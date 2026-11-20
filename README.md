@@ -14,6 +14,9 @@ A lightweight WPF sticky-notes app that integrates with Claude Code via shared m
 - Tag system with color coding
 - Search and filter notes
 - Clickable links (Ctrl+Click to open) and live `- [ ]` task checkboxes in note bodies
+- Links between notes: `[[note-file-name]]` (Obsidian's syntax) opens that note, and each note lists the notes that link to it ("Linked from"). "Copy Link" in the note menu gives you a link to paste
+- Nothing is lost: every save, delete and outside edit keeps the old copy. "Earlier Versions..." in the note menu puts one back, Undo appears after a delete, and "Deleted Notes..." in the tray menu brings back older deletes
+- `jln`, a command for Claude and other tools to find, write and restore notes safely (see below)
 - Paste or drag-drop images straight into a note (inline thumbnails)
 - Export notes to Word, embedded images included
 - Dark and light themes
@@ -40,6 +43,32 @@ Details about the note...
 ```
 
 Claude Code can create notes directly by writing markdown files to the notes folder — they appear in JL Notes immediately. A hand-written file always loads, even with a rough header or none at all (the title then comes from its first heading or its file name), and the app quotes values properly the next time it saves.
+
+## For Claude and other tools: jln
+
+`jln.exe` is installed next to the app (`%LOCALAPPDATA%\Programs\JLNotes\jln.exe`). It
+reads and writes notes through the app's own code, so a note it writes always shows
+in the app, and whatever it changes is kept in history.
+
+```
+jln find [words] [#tag ...] [--project P] [--status open|done]
+jln show <note>
+jln new --title T [--project P] [--priority high|medium|low] [--tags "a, b"] [--body TEXT]
+jln set <note> [--status done] [--title T] [--add-tag T] [--remove-tag T] [--body TEXT] ...
+jln append <note> --text TEXT
+jln links <note>
+jln history <note>        jln deleted        jln restore <note> [version]
+```
+
+`<note>` is a note's file name (with or without `.md`, or without its date when only
+one note has that name). A value of `-` is read from input.
+
+## History
+
+Before a note is overwritten or deleted, the file as it was goes into
+`~/.jlnotes/history/<note file name>/`, pictures included. Edits made outside the app
+while it runs (Notepad, Claude writing a file directly) are kept the same way.
+Nothing is pruned.
 
 ## Installation
 
