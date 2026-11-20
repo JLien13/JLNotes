@@ -56,10 +56,46 @@
                 </Border>
             </DataTemplate>
 
+            <!-- The note was changed in two places (two PCs, or the app and Claude)
+                 and asks which version to keep. Shown on an open note in every layout;
+                 opening the note also asks by itself. DataContext = NoteItemViewModel. -->
+            <DataTemplate x:Key="ClashBarTemplate">
+                <Border Padding="10,6" CornerRadius="4" Margin="0,0,0,8"
+                        Background="{DynamicResource BgSecondaryBrush}"
+                        BorderBrush="{DynamicResource AccentBlueBrush}" BorderThickness="1"
+                        Visibility="{Binding HasClash, Converter={StaticResource BoolToVisibility}}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Style="{StaticResource SecondaryText}"
+                                   TextWrapping="Wrap" VerticalAlignment="Center"
+                                   Text="This note was changed in two places. Both versions are kept." />
+                        <Button Grid.Column="1" Content="Choose which to keep"
+                                Style="{StaticResource SubtleButton}" FontSize="12" Margin="8,0,0,0"
+                                Foreground="{DynamicResource AccentBlueBrush}"
+                                Command="{Binding ChooseVersionCommand}" />
+                    </Grid>
+                </Border>
+            </DataTemplate>
+
+            <!-- The mark on a note's row when it has two versions to choose from.
+                 DataContext = NoteItemViewModel. -->
+            <DataTemplate x:Key="ClashMarkTemplate">
+                <TextBlock Text="2 versions" FontSize="10" Margin="0,0,6,0"
+                           Style="{StaticResource SecondaryText}"
+                           Foreground="{DynamicResource AccentBlueBrush}"
+                           ToolTip="Changed in two places. Open it to choose which to keep."
+                           Visibility="{Binding HasClash, Converter={StaticResource BoolToVisibility}}" />
+            </DataTemplate>
+
             <!-- Shared note editor: used by the inline card (lazily) and by the
                  split-view detail pane's edit mode. DataContext = NoteItemViewModel. -->
             <DataTemplate x:Key="NoteEditorTemplate">
                 <StackPanel>
+                    <ContentControl Content="{Binding}" ContentTemplate="{StaticResource ClashBarTemplate}" />
+
                     <!-- Title edit -->
                     <TextBlock Text="Title" Style="{StaticResource SecondaryText}" Margin="0,0,0,2" />
                     <TextBox Text="{Binding EditTitle, UpdateSourceTrigger=PropertyChanged}"
@@ -180,12 +216,13 @@
                             <CheckBox Grid.Column="3" Style="{StaticResource DarkCheckBox}"
                                       IsChecked="{Binding IsDone}"
                                       Margin="6,0,0,0" />
-                            <!-- Timestamp -->
-                            <TextBlock Grid.Column="4" Text="{Binding TimeAgo}"
-                                       Style="{StaticResource SecondaryText}"
-                                       FontSize="10"
-                                       VerticalAlignment="Center"
-                                       Margin="6,0,0,0" />
+                            <!-- Timestamp, and a mark when the note has two versions -->
+                            <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center" Margin="6,0,0,0">
+                                <ContentControl Content="{Binding}" ContentTemplate="{StaticResource ClashMarkTemplate}" />
+                                <TextBlock Text="{Binding TimeAgo}"
+                                           Style="{StaticResource SecondaryText}"
+                                           FontSize="10" />
+                            </StackPanel>
                         </Grid>
 
                         <!-- Subtitle: Tags -->
@@ -249,9 +286,12 @@
                         <TextBlock Grid.Column="1" Text="{Binding Title}"
                                    Style="{StaticResource BaseText}"
                                    TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
-                        <TextBlock Grid.Column="2" Text="{Binding TimeAgo}"
-                                   Style="{StaticResource SecondaryText}"
-                                   FontSize="10" VerticalAlignment="Center" Margin="6,0,0,0" />
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="6,0,0,0">
+                            <ContentControl Content="{Binding}" ContentTemplate="{StaticResource ClashMarkTemplate}" />
+                            <TextBlock Text="{Binding TimeAgo}"
+                                       Style="{StaticResource SecondaryText}"
+                                       FontSize="10" />
+                        </StackPanel>
                     </Grid>
                 </Border>
             </DataTemplate>
@@ -291,6 +331,7 @@
 
                     <!-- Meta + tags (display) -->
                     <StackPanel Grid.Row="1" Margin="0,4,0,0">
+                        <ContentControl Content="{Binding}" ContentTemplate="{StaticResource ClashBarTemplate}" Margin="0,4,0,0" />
                         <!-- Project picker (assign / change in place) + age -->
                         <StackPanel Orientation="Horizontal">
                             <ComboBox Style="{StaticResource DarkComboBox}"

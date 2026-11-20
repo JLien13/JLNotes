@@ -39,6 +39,7 @@ public partial class SettingsWindow : Window
         ProjectList.ItemsSource = _projects;
 
         VersionText.Text = $"Version {UpdateService.CurrentVersion}";
+        NotesFolderText.Text = AppPaths.DataDir;
 
         _initialized = true;
     }
@@ -81,6 +82,30 @@ public partial class SettingsWindow : Window
         {
             UpdateButton.IsEnabled = true;
         }
+    }
+
+    /// <summary>Settings face of NotesFolder.Change: pick a folder, say plainly what will
+    /// happen to the notes, then App adds them there, switches and restarts.</summary>
+    private void ChangeNotesFolder_Click(object sender, RoutedEventArgs e)
+    {
+        if (Application.Current is not App app) return;
+        var current = AppPaths.DataDir;
+        var dialog = new OpenFolderDialog
+        {
+            Title = "Pick the folder for your notes (a Dropbox folder shares them between PCs)",
+            InitialDirectory = current
+        };
+        if (dialog.ShowDialog(this) != true) return;
+
+        var target = dialog.FolderName;
+        if (NotesFolder.ProblemWith(AppPaths.LocalDir, current, target) is { } problem)
+        {
+            MessageBox.Show(this, problem, "Notes folder", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        if (MessageBox.Show(this, NotesFolder.WhatChangeWillDo(current, target), "Notes folder",
+                MessageBoxButton.OKCancel, MessageBoxImage.Question) == MessageBoxResult.OK)
+            app.ChangeNotesFolder(target, this);
     }
 
     private void ThemeCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -147,12 +172,11 @@ public partial class SettingsWindow : Window
         var dialog = new AddProjectWindow { Owner = this };
         if (dialog.ShowDialog() == true)
         {
-            _projects.Add(new ProjectInfo
+            ChangeProjects(() => _projectService.Add(new ProjectInfo
             {
                 Name = dialog.ProjectName,
                 Repo = dialog.RepoPath
-            });
-            SaveAndRefreshProjects();
+            }));
         }
     }
 
@@ -166,8 +190,7 @@ public partial class SettingsWindow : Window
 
         if (result == MessageBoxResult.Yes)
         {
-            _projects.Remove(selected);
-            SaveAndRefreshProjects();
+            ChangeProjects(() => _projectService.Remove(selected.Name));
         }
     }
 
@@ -185,14 +208,31 @@ public partial class SettingsWindow : Window
 
         if (dialog.ShowDialog(this) == true)
         {
-            selected.Repo = dialog.FolderName;
-            SaveAndRefreshProjects();
+            ChangeProjects(() => _projectService.SetRepo(selected.Name, dialog.FolderName));
         }
     }
 
-    private void SaveAndRefreshProjects()
+    /// <summary>One change to the shared project list. ProjectService refuses to write
+    /// over a list another PC is saving right now; then the user is told to try again.</summary>
+    private void ChangeProjects(Action change)
     {
-        _projectService.Save(_projects);
+        try
+        {
+            change();
+        }
+        catch (System.IO.IOException ex)
+        {
+            MessageBox.Show(this, $"Nothing was changed.{Environment.NewLine}{Environment.NewLine}{ex.Message}",
+                "Projects", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        RefreshProjects();
+    }
+
+    /// <summary>Shows the project list as it is now. Changes go through ProjectService one
+    /// at a time, so a project another PC added while this window was open is kept.</summary>
+    private void RefreshProjects()
+    {
+        _projects = _projectService.Load();
         ProjectList.ItemsSource = null;
         ProjectList.ItemsSource = _projects;
         SettingsChanged?.Invoke();

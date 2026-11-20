@@ -64,7 +64,7 @@ public class NoteFormatTests : IDisposable
     [Fact]
     public void EveryNoteProperty_IsSavedInTheFile()
     {
-        string[] notInHeader = [nameof(Note.Body), nameof(Note.FilePath)];
+        string[] notInHeader = [nameof(Note.Body), nameof(Note.FilePath), nameof(Note.CreatedIsKnown)]; // the last is read from the file, not stored
         var note = new Note();
         var props = typeof(Note).GetProperties().Where(p => !notInHeader.Contains(p.Name)).ToList();
         foreach (var p in props)

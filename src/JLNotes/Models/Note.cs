@@ -18,13 +18,48 @@ public class Note
     public NotePriority Priority { get; set; } = NotePriority.Medium;
     public NoteStatus Status { get; set; } = NoteStatus.Open;
     public List<string> Tags { get; set; } = [];
-    public DateTime Created { get; set; } = DateTime.Now;
-    public DateTime Updated { get; set; } = DateTime.Now;
+    // A note's times are kept to the second, as its file keeps them, so a note in memory
+    // always matches its file (a created time is how two notes are told apart).
+    private DateTime _created = ToTheSecond(DateTime.Now), _updated = ToTheSecond(DateTime.Now);
+    public DateTime Created { get => _created; set => _created = ToTheSecond(value); }
+    public DateTime Updated { get => _updated; set => _updated = ToTheSecond(value); }
     public string Repo { get; set; } = "";
     public string Branch { get; set; } = "";
     public string Body { get; set; } = "";
     public string FilePath { get; set; } = "";
     public int SortOrder { get; set; } = 0;
+
+    /// <summary>False when the note's file states no created time, so the one it has was
+    /// guessed from the file's name or date: then it cannot tell this note from another.</summary>
+    public bool CreatedIsKnown { get; private set; } = true;
+
+    /// <summary>
+    /// The one rule for whether two texts are the same note. A note's created time never
+    /// changes, so two that state different ones are different notes (another PC made one
+    /// with the same title the same day, and the sync tool gave it the same name). True or
+    /// false when both state one; null when either does not, as nothing can tell then.
+    /// </summary>
+    public static bool? AreSameNote(Note a, Note b) =>
+        a.CreatedIsKnown && b.CreatedIsKnown ? a.Created == b.Created : null;
+
+    /// <summary>True if two texts of a note file are the same apart from when it was last
+    /// updated and where it sits in a list: nothing anyone wrote differs, so neither needs
+    /// keeping as a version. Exact otherwise, so a line the app has no field for counts.</summary>
+    public static bool SameApartFromBookkeeping(string a, string b) =>
+        a == b || WithoutBookkeeping(a) == WithoutBookkeeping(b);
+
+    private static readonly string[] BookkeepingKeys = ["updated", "sortOrder"];
+
+    private static string WithoutBookkeeping(string markdown)
+    {
+        var lines = markdown.Split('\n').Select(l => l.TrimEnd('\r')).ToArray();
+        var (header, bodyStart) = SplitHeader(lines);
+        var kept = header.Where(line => HeaderLine.Match(line) is not { Success: true } m
+                                        || !BookkeepingKeys.Contains(m.Groups[1].Value, StringComparer.OrdinalIgnoreCase));
+        return string.Join("\n", kept) + "\n---\n" + string.Join("\n", lines[bodyStart..]);
+    }
+
+    private static DateTime ToTheSecond(DateTime at) => at.AddTicks(-(at.Ticks % TimeSpan.TicksPerSecond));
 
     /// <summary>One header line of a note file, as text and as the YAML library read it.</summary>
     private readonly record struct HeaderValue(string? Raw, object? Parsed);
@@ -104,7 +139,10 @@ public class Note
         if (string.IsNullOrEmpty(note.Title))
             note.Title = TitleWithoutHeader(note.Body, filePath);
         if (note.Created == default)
+        {
             note.Created = DateWithoutHeader(filePath);
+            note.CreatedIsKnown = false;
+        }
         if (note.Updated == default)
             note.Updated = note.Created;
         return note;

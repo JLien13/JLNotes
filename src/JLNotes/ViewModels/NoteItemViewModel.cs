@@ -17,6 +17,11 @@ public partial class NoteItemViewModel : ObservableObject
     private readonly ProjectCatalog _projects;
     private readonly NoteIndex _links;
 
+    // The file text what is on screen was built from. A save tells NoteService, so a
+    // change made meanwhile on another PC (or by Claude) is held as a second version
+    // instead of being written over. It follows the file whenever nothing is unsaved.
+    private string? _baseText;
+
     [ObservableProperty] private bool _isExpanded;
     [ObservableProperty] private string _editTitle = "";
     [ObservableProperty] private FlowDocument? _editDocument;
@@ -46,6 +51,7 @@ public partial class NoteItemViewModel : ObservableObject
         _settingsService = settingsService;
         _projects = projects;
         _links = links ?? new NoteIndex();
+        _baseText = noteService.LastSeenText(note.FilePath);
     }
 
     public Note Note => _note;
@@ -74,6 +80,12 @@ public partial class NoteItemViewModel : ObservableObject
     }
 
     public bool HasTags => Tags.Count > 0;
+
+    /// <summary>The note is open in an editor (the split pane, or an opened card).</summary>
+    public bool HasOpenEditor => EditDocument != null;
+
+    /// <summary>The note was changed in two places and asks which version to keep.</summary>
+    public bool HasClash => _noteService.HasClash(_note.FilePath);
 
     /// <summary>Other notes with a [[link]] to this one.</summary>
     public IReadOnlyList<Note> LinkedFrom => _links.LinkedFrom(_note);
@@ -137,7 +149,10 @@ public partial class NoteItemViewModel : ObservableObject
     public void Reload(Note fresh)
     {
         var fileChanged = fresh.ToMarkdown() != _note.ToMarkdown();
-        var editorFollows = EditDocument != null && !EditorHasChanges();
+        var unsaved = EditDocument != null && EditorHasChanges();
+        var editorFollows = EditDocument != null && !unsaved;
+        if (!unsaved)
+            _baseText = _noteService.LastSeenText(fresh.FilePath);
         _note = fresh;
         if (fileChanged && editorFollows)
             LoadEditor();
@@ -157,6 +172,7 @@ public partial class NoteItemViewModel : ObservableObject
     {
         LoadEditor();
         IsExpanded = true;
+        AskIfClash();
     }
 
     /// <summary>The Save button and Ctrl+S on a list card.</summary>
@@ -172,6 +188,8 @@ public partial class NoteItemViewModel : ObservableObject
     {
         IsExpanded = false;
         EditDocument = null;
+        // Nothing unsaved now: a change made from here on starts from the file as it is.
+        _baseText = _noteService.LastSeenText(_note.FilePath);
     }
 
     /// <summary>Save what the editor holds and let go of it. A new editor always
@@ -238,7 +256,8 @@ public partial class NoteItemViewModel : ObservableObject
             _note.Tags = ParseTags(EditTags);
             stampUpdated = true;
         }
-        _noteService.Save(_note, stampUpdated);
+        _noteService.Save(_note, stampUpdated, _baseText);
+        _baseText = _noteService.LastSeenText(_note.FilePath);
         RaiseDisplayChanged();
     }
 
@@ -261,6 +280,7 @@ public partial class NoteItemViewModel : ObservableObject
         OnPropertyChanged(nameof(StatusMenuText));
         OnPropertyChanged(nameof(LinkedFrom));
         OnPropertyChanged(nameof(HasLinkedFrom));
+        OnPropertyChanged(nameof(HasClash));
     }
 
     /// <summary>The one tag parser: comma-separated text to a trimmed,
@@ -346,6 +366,93 @@ public partial class NoteItemViewModel : ObservableObject
             Owner = System.Windows.Application.Current?.MainWindow is { IsVisible: true } main ? main : null
         };
         window.ShowDialog();
+    }
+
+    /// <summary>Settles a waiting version as chosen: the one that was shown, or else the
+    /// first. What is on screen is saved first, so "keep this" keeps what the user sees.</summary>
+    public void Resolve(ClashChoice choice, NoteVersion? shown = null)
+    {
+        try
+        {
+            SaveEditor();
+            if ((shown ?? _noteService.GetClashes(_note.FilePath).FirstOrDefault()) is { } clash)
+                _noteService.Resolve(clash, choice);
+        }
+        catch (Exception e) when (e is System.IO.IOException or UnauthorizedAccessException)
+        {
+            // The sync tool held a file, so the choice may be only partly made. What was
+            // written shows, nothing is lost, and the note still asks if it needs to.
+        }
+        RaiseDisplayChanged();
+        NoteChanged?.Invoke();
+    }
+
+    /// <summary>This note's file is gone (deleted here or on another PC), or now holds a
+    /// different note (another PC's, with the same name). Typing not yet saved is kept as
+    /// a note of its own rather than lost, with its pictures, and that note is returned;
+    /// null when nothing was unsaved. Either way the editor is let go.</summary>
+    public Note? KeepUnsavedAsNewNote()
+    {
+        Note? kept = null;
+        if (EditDocument != null && EditorHasChanges())
+        {
+            Save(); // the file is gone or holds another note: this makes a note under a free name
+            kept = _note;
+        }
+        CancelEdits();
+        return kept;
+    }
+
+    private bool _asking;
+
+    /// <summary>Opening a note that was changed in two places asks which version to keep.
+    /// The question waits until the note is on screen; "Decide later" leaves it until the
+    /// note is opened again (the bar on the note can also ask).</summary>
+    public void AskIfClash()
+    {
+        if (!HasClash || _asking) return;
+        System.Windows.Application.Current?.Dispatcher.BeginInvoke(
+            System.Windows.Threading.DispatcherPriority.Background, () =>
+            {
+                // Only while the user is looking: never at login, or with the panel hidden.
+                if (HasClash && !_asking && System.Windows.Application.Current?.MainWindow is { IsVisible: true, IsActive: true })
+                    ChooseVersionCommand.Execute(null);
+            });
+    }
+
+    /// <summary>Shows this note and its other version side by side to pick from.</summary>
+    [RelayCommand]
+    private void ChooseVersion()
+    {
+        SaveEditor();
+        if (_noteService.GetClashes(_note.FilePath).FirstOrDefault() is not { } clash) return;
+        Note current, other;
+        try
+        {
+            current = System.IO.File.Exists(_note.FilePath)
+                ? Note.ParseFromMarkdown(System.IO.File.ReadAllText(_note.FilePath), _note.FilePath)
+                : _note;
+            other = clash.Read();
+        }
+        catch (Exception e) when (e is System.IO.IOException or UnauthorizedAccessException)
+        {
+            return; // settled on another PC just now, or mid-sync: the bar stays if still needed
+        }
+        var chose = false;
+        _asking = true;
+        try
+        {
+            new Views.ClashWindow(current, other, choice => { chose = true; Resolve(choice, clash); })
+            {
+                Owner = System.Windows.Application.Current?.MainWindow is { IsVisible: true } main ? main : null
+            }.ShowDialog();
+        }
+        finally
+        {
+            _asking = false;
+        }
+        if (chose && HasClash)
+            AskIfClash(); // another version still waiting (three PCs, or more)
     }
 
     [RelayCommand]

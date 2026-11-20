@@ -17,6 +17,7 @@ A lightweight WPF sticky-notes app that integrates with Claude Code via shared m
 - Links between notes: `[[note-file-name]]` (Obsidian's syntax) opens that note, and each note lists the notes that link to it ("Linked from"). "Copy Link" in the note menu gives you a link to paste
 - Nothing is lost: every save, delete and outside edit keeps the old copy. "Earlier Versions..." in the note menu puts one back, Undo appears after a delete, and "Deleted Notes..." in the tray menu brings back older deletes
 - `jln`, a command for Claude and other tools to find, write and restore notes safely (see below)
+- The same notes on several PCs: point each one at a shared Dropbox folder in Settings (see below)
 - Paste or drag-drop images straight into a note (inline thumbnails)
 - Export notes to Word, embedded images included
 - Dark and light themes
@@ -25,7 +26,8 @@ A lightweight WPF sticky-notes app that integrates with Claude Code via shared m
 
 ## How It Works
 
-JL Notes watches a folder of markdown files (`~/.jlnotes/notes/`). Each note is a `.md` file with YAML frontmatter:
+JL Notes watches a folder of markdown files: the `notes` folder inside the notes folder
+(`~/.jlnotes` unless Settings picks another). Each note is a `.md` file with YAML frontmatter:
 
 ```markdown
 ---
@@ -42,7 +44,7 @@ updated: 2026-03-12T10:00:00
 Details about the note...
 ```
 
-Claude Code can create notes directly by writing markdown files to the notes folder — they appear in JL Notes immediately. A hand-written file always loads, even with a rough header or none at all (the title then comes from its first heading or its file name), and the app quotes values properly the next time it saves.
+Claude Code can create notes directly by writing markdown files to that `notes` folder. They appear in JL Notes immediately. A hand-written file always loads, even with a rough header or none at all (the title then comes from its first heading or its file name), and the app quotes values properly the next time it saves.
 
 ## For Claude and other tools: jln
 
@@ -58,17 +60,53 @@ jln set <note> [--status done] [--title T] [--add-tag T] [--remove-tag T] [--bod
 jln append <note> --text TEXT
 jln links <note>
 jln history <note>        jln deleted        jln restore <note> [version]
+jln where                 (the notes folder; note files are in its notes folder)
 ```
 
 `<note>` is a note's file name (with or without `.md`, or without its date when only
 one note has that name). A value of `-` is read from input.
 
+Tools that read note files themselves should ask `jln where` for the notes folder (the
+files are in its `notes` folder) rather than assume `~/.jlnotes`, since Settings can move
+the notes.
+
 ## History
 
 Before a note is overwritten or deleted, the file as it was goes into
-`~/.jlnotes/history/<note file name>/`, pictures included. Edits made outside the app
+`history/<note file name>/` in the notes folder, pictures included. Edits made outside the app
 while it runs (Notepad, Claude writing a file directly) are kept the same way.
 Nothing is pruned.
+
+## Several PCs
+
+Settings > Notes folder > Change... picks where the notes, pictures, history and project
+list live. Pick the same folder in Dropbox on each PC and they all show the same notes
+(Syncthing works too; other sync tools' conflict files are not recognized). Window places
+and the other settings stay with each PC.
+
+- **First PC:** make a new, empty folder in Dropbox and pick it. The notes are copied
+  there and the app restarts. The old folder is left as it was, as a backup. A folder
+  with other things in it is refused, so notes never mix with other files.
+- **Every other PC:** pick the same folder (the one holding `notes`, not `notes` itself).
+  Its notes are used, and any notes that PC had are added: notes the folder lacks are
+  copied in, except ones deleted there; where both have a note, the newer one is kept,
+  and the other goes to Earlier Versions if it is just an earlier version, or waits as a
+  second version to choose from if it was changed separately.
+- **Changed in two places at once** (two PCs within the few seconds before the sync tool
+  catches up, or the app and Claude): nothing is written over. Both versions are kept,
+  the note shows "2 versions", and opening it on any PC shows them side by side:
+  keep this one, keep the other, or combine both (every line of both and the tags of
+  both, with the title, project, priority and status of the one in the note). The one not
+  kept goes to Earlier Versions. Dropbox "conflicted copy" files and Syncthing `.sync-conflict-` files are
+  handled this way and never show up as extra notes.
+- **Typing in a note that changes under you:** if another PC deletes it, or puts a
+  different note with the same name in its place, what you typed is kept as a note of
+  its own, pictures included.
+- **Folder missing at start** (Dropbox not set up on this PC yet, or the folder moved):
+  the app asks before using anything else, and never quietly starts an empty folder.
+  If you choose this PC's own folder for now, the app offers to go back once the folder
+  has notes again, adding anything written meanwhile. `jln` refuses too, rather than
+  writing notes into a stray folder.
 
 ## Installation
 

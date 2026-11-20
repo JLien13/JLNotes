@@ -32,12 +32,16 @@ public partial class App : Application
     private DateTime _lastUpdateCheck = DateTime.MinValue;
     private bool _updateRunning;
 
-    private static readonly string BaseDir = AppPaths.BaseDir;
+    private static readonly string LocalDir = AppPaths.LocalDir;
     private static readonly string LegacyDir = AppPaths.LegacyDir;
+
+    // Passed to the copy started by Restart, which waits for this one to be gone.
+    private const string AfterArg = "--after";
 
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        WaitForPreviousRun(e.Args);
 
         _singleInstanceMutex = new Mutex(true, "JLNotes_SingleInstance", out bool isNewInstance);
         if (!isNewInstance)
@@ -57,18 +61,25 @@ public partial class App : Application
         }
 
         // Migrate from legacy directory if needed
-        if (!Directory.Exists(BaseDir) && Directory.Exists(LegacyDir))
+        if (!Directory.Exists(LocalDir) && Directory.Exists(LegacyDir))
         {
-            try { CopyDirectory(LegacyDir, BaseDir); }
+            try { Helpers.FolderCopy.CopyMissing(LegacyDir, LocalDir); }
             catch { /* fall through to create fresh */ }
         }
 
-        // Ensure data directory exists
-        Directory.CreateDirectory(BaseDir);
+        // This PC's own folder (settings) always exists; the notes folder may be elsewhere.
+        Directory.CreateDirectory(LocalDir);
+        _settingsService = new SettingsService(LocalDir);
+        if (NotesFolder.ForThisRun(_settingsService, LocalDir, UseThisPcsFolderInstead) is not { } dataDir)
+        {
+            Shutdown();
+            return;
+        }
+        AppPaths.DataDir = dataDir;
         Directory.CreateDirectory(AppPaths.NotesDir);
 
         // First-run: create empty projects.json if it doesn't exist
-        var projectsPath = Path.Combine(BaseDir, "projects.json");
+        var projectsPath = Path.Combine(AppPaths.DataDir, AppPaths.ProjectsFileName);
         var isFirstRun = !File.Exists(projectsPath);
         if (isFirstRun)
             File.WriteAllText(projectsPath, "[]");
@@ -76,9 +87,8 @@ public partial class App : Application
         // Create services
         _noteService = new NoteService(AppPaths.NotesDir);
         _noteService.MigrateAttachmentFolders();
-        _settingsService = new SettingsService(BaseDir);
-        _projectService = new ProjectService(BaseDir);
-        _updateService = new UpdateService(BaseDir);
+        _projectService = new ProjectService(AppPaths.DataDir);
+        _updateService = new UpdateService(LocalDir);
 
         // Load settings and apply theme
         var settings = _settingsService.Load();
@@ -113,6 +123,14 @@ public partial class App : Application
             _mainPanel.Show();
             _mainPanel.Activate();
         }
+        // Asked once the panel is on screen, never at login.
+        _mainPanel.IsVisibleChanged += (_, args) =>
+        {
+            if (args.NewValue is true)
+                Dispatcher.BeginInvoke(DispatcherPriority.Background, OfferNotesFolderBack);
+        };
+        if (_mainPanel.IsVisible)
+            Dispatcher.BeginInvoke(DispatcherPriority.Background, OfferNotesFolderBack);
 
         // Quiet self-update check: first tick right away, then on the cadence above.
         _updateTimer = new DispatcherTimer { Interval = UpdateTickEvery };
@@ -178,7 +196,93 @@ public partial class App : Application
     }
 
     /// <summary>The app's one updater instance (Settings and the header link share it).</summary>
-    public UpdateService Updater => _updateService ??= new UpdateService(BaseDir);
+    public UpdateService Updater => _updateService ??= new UpdateService(LocalDir);
+
+    /// <summary>The notes folder picked in Settings can't be found at start: asks whether
+    /// to use this PC's own folder instead. No closes JL Notes.</summary>
+    private static bool UseThisPcsFolderInstead(string problem)
+    {
+        var nl = Environment.NewLine;
+        return MessageBox.Show(
+            $"{problem}{nl}{nl}Use this PC's own notes folder for now? It has only what this PC had before it " +
+            "used that folder (it may be out of date, or empty), and changes made on other PCs won't show. " +
+            $"Once the folder is back, JL Notes offers to go back to it, adding anything written here meanwhile.{nl}{nl}" +
+            "No closes JL Notes, so you can try again later.",
+            "JL Notes", MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes;
+    }
+
+    /// <summary>
+    /// Makes <paramref name="target"/> the notes folder (NotesFolder.Change: this PC's
+    /// notes are added to it) and restarts, since every part of the app reads the folder
+    /// once at start. Unsaved typing is saved first, so it moves too. If it fails, the
+    /// notes folder stays as it was and the user is told why.
+    /// </summary>
+    public void ChangeNotesFolder(string target, Window? owner)
+    {
+        PersistSessionState();
+        try
+        {
+            if (NotesFolder.Change(_settingsService!, LocalDir, AppPaths.DataDir, target) != NotesFolderOutcome.Unchanged)
+                Restart();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            var nl = Environment.NewLine;
+            var text = $"The notes folder was not changed: JL Notes still uses {AppPaths.DataDir}.{nl}{nl}{ex.Message}" +
+                       $"{nl}{nl}Anything already copied to {target} stays there; picking it again finishes the copy.";
+            if (owner != null)
+                MessageBox.Show(owner, text, "Notes folder", MessageBoxButton.OK, MessageBoxImage.Warning);
+            else
+                MessageBox.Show(text, "Notes folder", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    private bool _offeredNotesFolderBack;
+
+    /// <summary>This PC fell back to its own folder at a start because the notes folder
+    /// could not be found. Now that it is back, offers to go back to it.</summary>
+    private void OfferNotesFolderBack()
+    {
+        if (_offeredNotesFolderBack || _mainPanel is not { IsVisible: true }
+            || NotesFolder.FolderToGoBackTo(_settingsService!.Load(), AppPaths.DataDir) is not { } away) return;
+        _offeredNotesFolderBack = true; // once a run
+        var nl = Environment.NewLine;
+        var answer = MessageBox.Show(_mainPanel!,
+            $"Your notes folder is back:{nl}{away}{nl}{nl}Go back to it now? Notes written on this PC meanwhile " +
+            "are added to it (notes deleted here meanwhile stay there), and JL Notes restarts. If Dropbox is " +
+            $"still catching up on this PC, choose No and pick the folder in Settings once it is done.{nl}{nl}" +
+            "No stays with this PC's own notes folder.",
+            "JL Notes", MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (answer == MessageBoxResult.Yes)
+            ChangeNotesFolder(away, _mainPanel);
+        else
+            NotesFolder.ForgetFolderToGoBackTo(_settingsService);
+    }
+
+    /// <summary>Closes and starts again. The new copy waits until this one is gone.
+    /// Shutdown runs OnExit, which saves and lets go of everything.</summary>
+    private void Restart()
+    {
+        var exe = Environment.ProcessPath;
+        if (exe != null)
+            System.Diagnostics.Process.Start(exe, $"{AfterArg} {Environment.ProcessId}");
+        Shutdown();
+    }
+
+    private static void WaitForPreviousRun(string[] args)
+    {
+        var at = Array.IndexOf(args, AfterArg);
+        if (at < 0 || at + 1 >= args.Length || !int.TryParse(args[at + 1], out var pid)) return;
+        try
+        {
+            using var previous = System.Diagnostics.Process.GetProcessById(pid);
+            previous.WaitForExit(TimeSpan.FromSeconds(15));
+        }
+        catch (ArgumentException)
+        {
+            // Already gone.
+        }
+    }
 
     private MainViewModel? MainVm => _mainPanel?.DataContext as MainViewModel;
 
@@ -240,10 +344,11 @@ public partial class App : Application
         }
     }
 
-    /// <summary>Everything OnExit saves, callable before an external kill.</summary>
+    /// <summary>Everything OnExit saves, callable before an external kill: every open
+    /// editor (the split pane and any open card) and where the windows are.</summary>
     private void PersistSessionState()
     {
-        MainVm?.SaveSplitEditor();
+        MainVm?.SaveOpenEditors();
 
         if (_mainPanel != null && _settingsService != null)
         {
@@ -334,15 +439,6 @@ public partial class App : Application
         // Replace the first dictionary (Colors)
         if (dict.Count > 0)
             dict[0] = new ResourceDictionary { Source = colorsUri };
-    }
-
-    private static void CopyDirectory(string source, string dest)
-    {
-        Directory.CreateDirectory(dest);
-        foreach (var file in Directory.GetFiles(source))
-            File.Copy(file, Path.Combine(dest, Path.GetFileName(file)), false);
-        foreach (var dir in Directory.GetDirectories(source))
-            CopyDirectory(dir, Path.Combine(dest, Path.GetFileName(dir)));
     }
 
     protected override void OnExit(ExitEventArgs e)
