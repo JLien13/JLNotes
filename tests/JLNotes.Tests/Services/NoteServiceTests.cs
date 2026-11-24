@@ -82,8 +82,8 @@ public class NoteServiceTests : IDisposable
     [Fact]
     public void FileWatcher_RaisesEvent_WhenFileCreated()
     {
-        var raised = false;
-        _service.NotesChanged += () => raised = true;
+        using var raised = new ManualResetEventSlim();
+        _service.NotesChanged += raised.Set;
         _service.StartWatching();
 
         var path = Path.Combine(_testDir, "notes", "new-note.md");
@@ -101,8 +101,7 @@ public class NoteServiceTests : IDisposable
             Body here.
             """);
 
-        // Give FileSystemWatcher time to fire
-        Thread.Sleep(500);
-        Assert.True(raised);
+        // The watcher reports on another thread, later on a busy PC: wait for it, up to a limit.
+        Assert.True(raised.Wait(TimeSpan.FromSeconds(10)));
     }
 }
