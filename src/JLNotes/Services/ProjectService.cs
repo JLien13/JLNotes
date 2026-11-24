@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text.Json;
+using JLNotes.Converters;
 using JLNotes.Helpers;
 using JLNotes.Models;
 
@@ -52,15 +53,15 @@ public class ProjectService
     // read it earlier: another PC sharing the notes folder may have changed it meanwhile.
     // A list not whole (another PC is writing it) is never written over: the change throws.
 
-    public void Add(ProjectInfo project) => Change(projects => projects.Add(project));
+    /// <summary>Adds a project, in a color no project in the list has yet. One already
+    /// listed is left as it is.</summary>
+    public void Add(string name) => Change(projects =>
+    {
+        if (projects.Any(p => ProjectCatalog.Same(p.Name, name))) return;
+        projects.Add(new ProjectInfo { Name = name, Color = ColorPalette.ForNewProject(name, projects.Select(p => p.Color)) });
+    });
 
     public void Remove(string name) => Change(projects => projects.RemoveAll(p => ProjectCatalog.Same(p.Name, name)));
-
-    public void SetRepo(string name, string repo) => Change(projects =>
-    {
-        foreach (var project in projects.Where(p => ProjectCatalog.Same(p.Name, name)))
-            project.Repo = repo;
-    });
 
     /// <summary>Adds each project the list lacks (by name). Where both have a project, the
     /// list's own details win.</summary>

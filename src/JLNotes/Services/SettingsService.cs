@@ -34,6 +34,17 @@ public class SettingsService
         File.WriteAllText(_settingsPath, json);
     }
 
+    /// <summary>Sets this PC's repo folder for a project; "" clears it.</summary>
+    public void SetProjectRepo(string project, string folder)
+    {
+        var settings = Load();
+        foreach (var spelling in settings.ProjectRepos.Keys.Where(name => ProjectCatalog.Same(name, project)).ToList())
+            settings.ProjectRepos.Remove(spelling);
+        if (!string.IsNullOrWhiteSpace(folder))
+            settings.ProjectRepos[project] = folder;
+        Save(settings);
+    }
+
     // The HKCU Run value is the single source of truth for auto-start; the
     // installer's optional "startupicon" task writes the same value name.
     private const string RunKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";

@@ -66,7 +66,7 @@ public class ProjectServiceTests : IDisposable
         const string partial = "[{\"name\":\"A1i\"},{\"name\":\"Wo";
         File.WriteAllText(Path.Combine(_dir, "projects.json"), partial);
 
-        Assert.ThrowsAny<Exception>(() => service.Add(new ProjectInfo { Name = "VasoGuard" }));
+        Assert.ThrowsAny<Exception>(() => service.Add("VasoGuard"));
         Assert.Equal(partial, File.ReadAllText(Path.Combine(_dir, "projects.json")));
     }
 
@@ -76,14 +76,41 @@ public class ProjectServiceTests : IDisposable
         // Settings stays open while another PC adds a project: nothing it adds is lost.
         var openSettings = new ProjectService(_dir);
         openSettings.Save([new ProjectInfo { Name = "A1i" }]);
-        new ProjectService(_dir).Add(new ProjectInfo { Name = "From the other PC" });
+        new ProjectService(_dir).Add("From the other PC");
 
-        openSettings.Add(new ProjectInfo { Name = "VasoGuard" });
-        openSettings.SetRepo("A1i", @"C:\repo");
+        openSettings.Add("VasoGuard");
+        openSettings.Add("HQ");
         openSettings.Remove("VasoGuard");
 
-        var projects = openSettings.Load();
-        Assert.Equal(["A1i", "From the other PC"], projects.Select(p => p.Name));
-        Assert.Equal(@"C:\repo", projects[0].Repo);
+        Assert.Equal(["A1i", "From the other PC", "HQ"], openSettings.Load().Select(p => p.Name));
+    }
+
+    [Fact]
+    public void Add_GivesEachProjectItsOwnColor_AndListsNoProjectTwice()
+    {
+        var service = new ProjectService(_dir);
+        service.Add("VasoGuard");
+        service.Add("A1i");
+        service.Add("vasoguard"); // the same project: names differing only by case are one
+
+        var projects = service.Load();
+        Assert.Equal(["VasoGuard", "A1i"], projects.Select(p => p.Name));
+        Assert.NotEqual(projects[0].Color, projects[1].Color);
+    }
+
+    [Fact]
+    public void ARepoFolderFromAnOlderVersion_StaysInTheListAsItWasWritten()
+    {
+        // Before 1.3.9 the shared list held each project's repo folder. A PC still on an
+        // older version reads it there, so a change to the list must not drop it.
+        File.WriteAllText(Path.Combine(_dir, "projects.json"),
+            """[ { "name": "A1i", "repo": "C:\\Users\\JL\\A1i", "color": "#ff6b4a" } ]""");
+        var service = new ProjectService(_dir);
+
+        service.Add("HQ");
+        service.Remove("HQ");
+
+        var kept = Assert.Single(service.Load());
+        Assert.Equal(@"C:\Users\JL\A1i", kept.Repo);
     }
 }

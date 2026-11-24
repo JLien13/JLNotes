@@ -104,6 +104,10 @@ and the other settings stay with each PC.
   copied in, except ones deleted there; where both have a note, the newer one is kept,
   and the other goes to Earlier Versions if it is just an earlier version, or waits as a
   second version to choose from if it was changed separately.
+- **Projects:** every PC shows the same projects: each one a note is in, plus any added
+  in Settings > Projects. A project's repo folder (where "Open in Claude" starts) is
+  picked on each PC with Browse Repo and stays with that PC, because the same repo sits
+  in a different place on each.
 - **Changed in two places at once** (two PCs within the few seconds before the sync tool
   catches up, or the app and Claude): nothing is written over. Both versions are kept,
   the note shows "2 versions", and opening it on any PC shows them side by side:

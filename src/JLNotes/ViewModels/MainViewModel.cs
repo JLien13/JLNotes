@@ -186,6 +186,7 @@ public partial class MainViewModel : ObservableObject
 
     public NoteService NoteService => _noteService;
     public ProjectService ProjectService => _projectService;
+    public ProjectCatalog ProjectCatalog => _projects;
     public SettingsService SettingsService => _settingsService;
 
     private IEnumerable<NoteItemViewModel> OnScreen =>
@@ -263,9 +264,10 @@ public partial class MainViewModel : ObservableObject
     public void RefreshNotes()
     {
         var notes = _noteService.LoadAll();
-        _projects.Refresh(_projectService.Load(), notes, SelectedProject);
+        var settings = _settingsService.Load();
+        _projects.Refresh(_projectService.Load(), settings.ProjectRepos, notes, SelectedProject);
         _links.Refresh(notes);
-        var subtitleDisplay = _settingsService.Load().SubtitleDisplay;
+        var subtitleDisplay = settings.SubtitleDisplay;
 
         // One row per file. A second one on the same file (typing that could not be kept
         // as its own note last time) is handled with the gone ones below and tried again.
