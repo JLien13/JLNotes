@@ -2,7 +2,6 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using Microsoft.Win32;
-using JLNotes.Models;
 using JLNotes.Services;
 
 namespace JLNotes.Views;
@@ -11,18 +10,21 @@ public partial class SettingsWindow : Window
 {
     private readonly SettingsService _settingsService;
     private readonly ProjectService _projectService;
+    private readonly ProjectCatalog _projects;
     private readonly ClaudeSkill _claudeSkill;
-    private List<ProjectInfo> _projects;
     private bool _initialized;
 
+    /// <summary>The main view reads everything again, its project list included.</summary>
     public event Action? SettingsChanged;
 
-    public SettingsWindow(SettingsService settingsService, ProjectService projectService, ClaudeSkill claudeSkill)
+    /// <param name="projects">The main view's project list, which this window shows.</param>
+    public SettingsWindow(SettingsService settingsService, ProjectService projectService, ProjectCatalog projects,
+        ClaudeSkill claudeSkill)
     {
         _settingsService = settingsService;
         _projectService = projectService;
+        _projects = projects;
         _claudeSkill = claudeSkill;
-        _projects = _projectService.Load();
         InitializeComponent();
 
         var settings = _settingsService.Load();
@@ -38,7 +40,7 @@ public partial class SettingsWindow : Window
         ConfirmDeleteCheck.IsChecked = settings.ConfirmDelete;
         AutoStartCheck.IsChecked = _settingsService.GetAutoStart();
 
-        ProjectList.ItemsSource = _projects;
+        ProjectList.ItemsSource = _projects.Rows;
 
         VersionText.Text = $"Version {UpdateService.CurrentVersion}";
         NotesFolderText.Text = AppPaths.DataDir;
@@ -207,17 +209,27 @@ public partial class SettingsWindow : Window
         var dialog = new AddProjectWindow { Owner = this };
         if (dialog.ShowDialog() == true)
         {
-            ChangeProjects(() => _projectService.Add(new ProjectInfo
+            ChangeProjects(() =>
             {
-                Name = dialog.ProjectName,
-                Repo = dialog.RepoPath
-            }));
+                _projectService.Add(dialog.ProjectName);
+                if (dialog.RepoPath.Length > 0)
+                    _settingsService.SetProjectRepo(dialog.ProjectName, dialog.RepoPath);
+            });
         }
     }
 
     private void RemoveProject_Click(object sender, RoutedEventArgs e)
     {
-        if (ProjectList.SelectedItem is not ProjectInfo selected) return;
+        if (ProjectList.SelectedItem is not ProjectRow selected) return;
+
+        if (selected.Notes > 0)
+        {
+            MessageBox.Show(this,
+                $"\"{selected.Name}\" has {(selected.Notes == 1 ? "1 note" : $"{selected.Notes} notes")} in it, " +
+                "and a project stays for as long as a note is in it. Move them to another project first.",
+                "Remove Project", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
 
         var result = MessageBox.Show(
             $"Remove project \"{selected.Name}\"?",
@@ -225,30 +237,35 @@ public partial class SettingsWindow : Window
 
         if (result == MessageBoxResult.Yes)
         {
-            ChangeProjects(() => _projectService.Remove(selected.Name));
+            ChangeProjects(() =>
+            {
+                _projectService.Remove(selected.Name);
+                _settingsService.SetProjectRepo(selected.Name, "");
+            });
         }
     }
 
     private void BrowseProjectRepo_Click(object sender, RoutedEventArgs e)
     {
-        if (ProjectList.SelectedItem is not ProjectInfo selected) return;
+        if (ProjectList.SelectedItem is not ProjectRow selected) return;
 
         var dialog = new OpenFolderDialog
         {
-            Title = $"Select repo folder for {selected.Name}"
+            Title = $"Select repo folder for {selected.Name} on this PC"
         };
 
-        if (!string.IsNullOrEmpty(selected.Repo) && System.IO.Directory.Exists(selected.Repo))
+        if (System.IO.Directory.Exists(selected.Repo))
             dialog.InitialDirectory = selected.Repo;
 
         if (dialog.ShowDialog(this) == true)
         {
-            ChangeProjects(() => _projectService.SetRepo(selected.Name, dialog.FolderName));
+            ChangeProjects(() => _settingsService.SetProjectRepo(selected.Name, dialog.FolderName));
         }
     }
 
-    /// <summary>One change to the shared project list. ProjectService refuses to write
-    /// over a list another PC is saving right now; then the user is told to try again.</summary>
+    /// <summary>One change to the projects: the list every PC shares, or this PC's repo
+    /// folder for one. ProjectService refuses to write over a list another PC is saving
+    /// right now; then the user is told to try again.</summary>
     private void ChangeProjects(Action change)
     {
         try
@@ -267,10 +284,8 @@ public partial class SettingsWindow : Window
     /// at a time, so a project another PC added while this window was open is kept.</summary>
     private void RefreshProjects()
     {
-        _projects = _projectService.Load();
-        ProjectList.ItemsSource = null;
-        ProjectList.ItemsSource = _projects;
         SettingsChanged?.Invoke();
+        ProjectList.ItemsSource = _projects.Rows;
     }
 
     private void Close_Click(object sender, RoutedEventArgs e)

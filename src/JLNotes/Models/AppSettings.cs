@@ -61,6 +61,13 @@ public class AppSettings
     // used instead: once it is back, the app offers to go back to it. Empty otherwise.
     [JsonPropertyName("notesFolderAway")]
     public string NotesFolderAway { get; set; } = "";
+
+    // This PC's repo folder for each project, by project name (Settings > Projects).
+    // Here and not in the shared project list, because the same repo sits in a different
+    // place on each PC. SettingsService.SetProjectRepo is the one writer of this value,
+    // ProjectCatalog.RepoOf the one reader.
+    [JsonPropertyName("projectRepos")]
+    public Dictionary<string, string> ProjectRepos { get; set; } = [];
 }
 
 public class WindowPosition

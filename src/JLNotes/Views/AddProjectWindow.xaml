@@ -42,7 +42,7 @@
                          BorderBrush="{DynamicResource BorderSubtleBrush}"
                          FontFamily="Segoe UI" FontSize="12"
                          Padding="8,5"
-                         Tag="Repo folder path"
+                         Tag="Repo folder on this PC (optional)"
                          Style="{StaticResource SearchBox}" />
                 <Button Grid.Column="1" Content="Browse"
                         Style="{StaticResource SubtleButton}"

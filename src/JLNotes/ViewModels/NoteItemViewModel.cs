@@ -464,18 +464,15 @@ public partial class NoteItemViewModel : ObservableObject
     [RelayCommand]
     private void OpenInClaude()
     {
-        // Resolve repo path: try note's Repo field as absolute path first,
-        // then fall back to project's registered repo path
-        var repoPath = Repo;
-        if (string.IsNullOrEmpty(repoPath) || !System.IO.Directory.Exists(repoPath))
-        {
-            repoPath = _projects.RepoOf(Project);
-        }
-
-        if (string.IsNullOrEmpty(repoPath) || !System.IO.Directory.Exists(repoPath))
+        // Claude opens in the project's repo folder on this PC. The note's own repo field
+        // is a name to read, not a folder.
+        var repoPath = _projects.RepoOf(Project);
+        if (!System.IO.Directory.Exists(repoPath))
         {
             System.Windows.MessageBox.Show(
-                $"No valid repo path found for project \"{Project}\".\nSet a repo path in projects.json or on the note.",
+                string.IsNullOrWhiteSpace(Project)
+                    ? "This note has no project. Give it one, then pick the project's repo folder in Settings > Projects."
+                    : $"Project \"{Project}\" has no repo folder on this PC, or the folder is gone.\nPick it in Settings > Projects.",
                 "Open in Claude", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
             return;
         }

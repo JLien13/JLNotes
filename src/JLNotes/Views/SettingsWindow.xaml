@@ -229,8 +229,8 @@
                             <TextBlock Text="{Binding Name}"
                                        Foreground="{DynamicResource TextPrimaryBrush}"
                                        FontWeight="SemiBold" FontSize="12" />
-                            <TextBlock Text="{Binding Repo}"
-                                       ToolTip="{Binding Repo}"
+                            <TextBlock Text="{Binding RepoText}"
+                                       ToolTip="{Binding RepoText}"
                                        Foreground="{DynamicResource TextSecondaryBrush}"
                                        FontSize="10" TextTrimming="CharacterEllipsis" />
                         </StackPanel>

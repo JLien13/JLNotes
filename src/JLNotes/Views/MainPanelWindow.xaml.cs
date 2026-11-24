@@ -243,7 +243,9 @@ public partial class MainPanelWindow : Window
     private void Settings_Click(object sender, RoutedEventArgs e)
     {
         if (DataContext is not MainViewModel mainVm) return;
-        var settingsWindow = new SettingsWindow(mainVm.SettingsService, mainVm.ProjectService, ClaudeSkill.ForThisPc())
+        mainVm.RefreshNotes(); // Settings lists the projects as they are now (another PC may have changed them)
+        var settingsWindow = new SettingsWindow(mainVm.SettingsService, mainVm.ProjectService, mainVm.ProjectCatalog,
+                ClaudeSkill.ForThisPc())
             { Owner = this };
         settingsWindow.SettingsChanged += () =>
         {

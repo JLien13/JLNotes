@@ -5,10 +5,10 @@ using System.Windows.Media;
 namespace JLNotes.Converters;
 
 /// <summary>
-/// Single source of truth for tag colors: the palette and the stable
-/// tag-to-color mapping shared by every tag converter.
+/// Single source of truth for the colors the app hands out: the palette, the stable
+/// tag-to-color mapping shared by every tag converter, and the color a new project gets.
 /// </summary>
-internal static class TagPalette
+internal static class ColorPalette
 {
     private static readonly Color[] Colors =
     [
@@ -25,6 +25,13 @@ internal static class TagPalette
     /// <summary>Deterministic color for a tag: same tag -> same color across runs.</summary>
     public static Color ColorFor(string tag)
         => Colors[Math.Abs(StableHash(tag)) % Colors.Length];
+
+    /// <summary>The color a new project gets, as "#rrggbb": the first in the palette that
+    /// no project has yet; once all are taken, the one its name maps to.</summary>
+    public static string ForNewProject(string name, IEnumerable<string> taken)
+        => Colors.Select(Hex).Except(taken, StringComparer.OrdinalIgnoreCase).FirstOrDefault() ?? Hex(ColorFor(name));
+
+    private static string Hex(Color color) => $"#{color.R:x2}{color.G:x2}{color.B:x2}";
 
     private static int StableHash(string s)
     {
@@ -46,7 +53,7 @@ public class TagColorConverter : IValueConverter
         if (value is not string tag || string.IsNullOrWhiteSpace(tag))
             return Brushes.Gray;
 
-        var color = TagPalette.ColorFor(tag);
+        var color = ColorPalette.ColorFor(tag);
         return new SolidColorBrush(Color.FromArgb(0x40, color.R, color.G, color.B));
     }
 
@@ -62,7 +69,7 @@ public class TagTextColorConverter : IValueConverter
         if (value is not string tag || string.IsNullOrWhiteSpace(tag))
             return Brushes.Gray;
 
-        return new SolidColorBrush(TagPalette.ColorFor(tag));
+        return new SolidColorBrush(ColorPalette.ColorFor(tag));
     }
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
