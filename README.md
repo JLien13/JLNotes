@@ -17,6 +17,7 @@ A lightweight WPF sticky-notes app that integrates with Claude Code via shared m
 - Links between notes: `[[note-file-name]]` (Obsidian's syntax) opens that note, and each note lists the notes that link to it ("Linked from"). "Copy Link" in the note menu gives you a link to paste
 - Nothing is lost: every save, delete and outside edit keeps the old copy. "Earlier Versions..." in the note menu puts one back, Undo appears after a delete, and "Deleted Notes..." in the tray menu brings back older deletes
 - `jln`, a command for Claude and other tools to find, write and restore notes safely (see below)
+- One click joins Claude Code to your notes: Settings > Claude > Connect (see below)
 - The same notes on several PCs: point each one at a shared Dropbox folder in Settings (see below)
 - Paste or drag-drop images straight into a note (inline thumbnails)
 - Export notes to Word, embedded images included
@@ -69,6 +70,17 @@ one note has that name). A value of `-` is read from input.
 Tools that read note files themselves should ask `jln where` for the notes folder (the
 files are in its `notes` folder) rather than assume `~/.jlnotes`, since Settings can move
 the notes.
+
+### Connecting Claude
+
+Settings > Claude > Connect writes one file, `~/.claude/skills/jl-notes/SKILL.md`, which
+tells Claude Code to use `jln` for your notes. After that, "log this to my notes" works
+in any new Claude Code session. JL Notes keeps that file up to date each time it starts,
+so it never falls behind the app. A JL Notes skill it did not write (made by hand, or a
+link to a folder kept somewhere else) is left alone, and Settings says where it is.
+
+"Copy for another AI" puts the same instructions on the clipboard as a message, for an
+AI that JL Notes cannot set up by itself. Paste it to that AI.
 
 ## History
 

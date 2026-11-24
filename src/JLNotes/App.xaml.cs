@@ -89,6 +89,7 @@ public partial class App : Application
         _noteService.MigrateAttachmentFolders();
         _projectService = new ProjectService(AppPaths.DataDir);
         _updateService = new UpdateService(LocalDir);
+        KeepClaudeSkillUpToDate();
 
         // Load settings and apply theme
         var settings = _settingsService.Load();
@@ -193,6 +194,20 @@ public partial class App : Application
         if ((sender as FrameworkElement)?.DataContext is not NoteItemViewModel vm) return;
         vm.IsEditingTags = false;
         vm.SaveEditor();
+    }
+
+    /// <summary>After an update, the skill this app wrote into Claude's folder (Settings >
+    /// Claude > Connect) is brought up to date, so it never falls behind the app.</summary>
+    private static void KeepClaudeSkillUpToDate()
+    {
+        try
+        {
+            ClaudeSkill.ForThisPc().KeepUpToDate();
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            // Claude's folder can't be read or written now. Settings > Claude says so, and why.
+        }
     }
 
     /// <summary>The app's one updater instance (Settings and the header link share it).</summary>

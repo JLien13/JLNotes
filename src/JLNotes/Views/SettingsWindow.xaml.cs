@@ -11,15 +11,17 @@ public partial class SettingsWindow : Window
 {
     private readonly SettingsService _settingsService;
     private readonly ProjectService _projectService;
+    private readonly ClaudeSkill _claudeSkill;
     private List<ProjectInfo> _projects;
     private bool _initialized;
 
     public event Action? SettingsChanged;
 
-    public SettingsWindow(SettingsService settingsService, ProjectService projectService)
+    public SettingsWindow(SettingsService settingsService, ProjectService projectService, ClaudeSkill claudeSkill)
     {
         _settingsService = settingsService;
         _projectService = projectService;
+        _claudeSkill = claudeSkill;
         _projects = _projectService.Load();
         InitializeComponent();
 
@@ -40,8 +42,41 @@ public partial class SettingsWindow : Window
 
         VersionText.Text = $"Version {UpdateService.CurrentVersion}";
         NotesFolderText.Text = AppPaths.DataDir;
+        ShowClaude(() => _claudeSkill.State);
 
         _initialized = true;
+    }
+
+    /// <summary>Settings face of ClaudeSkill: what it says about this PC and the one
+    /// button it offers, after <paramref name="act"/> (a look, or Connect).</summary>
+    private void ShowClaude(Func<ClaudeSkillState> act)
+    {
+        string? button = null;
+        try
+        {
+            (ClaudeStatusText.Text, button) = _claudeSkill.Describe(act());
+        }
+        catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException)
+        {
+            ClaudeStatusText.Text = $"Claude's folder could not be read or written: {ex.Message}";
+        }
+        ClaudeConnectButton.Content = button;
+        ClaudeConnectButton.Visibility = button == null ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    private void ConnectClaude_Click(object sender, RoutedEventArgs e) => ShowClaude(_claudeSkill.Connect);
+
+    private void CopyClaudeInstructions_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            Clipboard.SetText(_claudeSkill.Instructions);
+            ClaudeStatusText.Text = "Copied. Paste it to your AI, and it sets itself up to use your notes.";
+        }
+        catch (System.Runtime.InteropServices.ExternalException)
+        {
+            ClaudeStatusText.Text = "Another program is using the clipboard. Try again.";
+        }
     }
 
     // Settings face of the self-updater. First click checks; if a newer release
